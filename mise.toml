@@ -1,0 +1,9 @@
+# The only place in the repository that names the Swift toolchain. scripts/build-app.sh and both workflows run Swift
+# through `mise exec`, so bumping it here bumps it for CI and every Mac. The SDK still comes from the active Xcode, which
+# has to carry the macOS 26 SDK.
+#
+#   curl https://mise.run | sh     # https://mise.jdx.dev
+#   mise install                   # from this directory
+
+[tools]
+swift = "6.3.3"
