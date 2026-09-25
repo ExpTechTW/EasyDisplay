@@ -27,3 +27,12 @@ jobs:
             exit 1
           fi
           scripts/check-commits.sh "$BASE_SHA..$HEAD_SHA"
+
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      # Swift comes from mise.toml, the same pin every Mac uses, not whichever the runner's Xcode ships. The install is
+      # cached by mise-action, keyed on mise.toml.
+      - uses: jdx/mise-action@v4
+      - run: mise exec -- swift test
