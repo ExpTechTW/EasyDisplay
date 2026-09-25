@@ -1,0 +1,172 @@
+# Every push to main publishes a snapshot, as a GitHub pre-release; every `v*` tag publishes a release. The naming
+# follows DPIP: scripts/version.sh decides the label, train and code, and scripts/notes.sh writes the notes from the
+# commits' changelog lines.
+#
+# Each one carries the zipped app, signed with the team's Developer ID and notarized, and its build code at the end of
+# the notes, where the next run (and an updater, later) reads it.
+name: Release
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+# One at a time: two runs counting the same tags would give their snapshots the same name.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      # Full history: the code counts this year's commits, and the label counts this week's snapshots.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]{2}\.[1-9][0-9]*$'; then
+              echo "::error::a release tag is v<yy>.<n>, e.g. v26.1 — not $GITHUB_REF_NAME"
+              exit 1
+            fi
+            eval "$(scripts/version.sh)"
+            if [ "v$EAZYDISPLAY_LABEL" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::$GITHUB_REF_NAME isn't the newest release tag on its commit (v$EAZYDISPLAY_LABEL is)"
+              exit 1
+            fi
+          else
+            # A snapshot, even when the commit also carries a release tag: that tag's run publishes the release.
+            eval "$(scripts/version.sh --snapshot)"
+          fi
+          {
+            echo "label=$EAZYDISPLAY_LABEL"
+            echo "train=$EAZYDISPLAY_TRAIN"
+            echo "code=$EAZYDISPLAY_CODE"
+            echo "date=$EAZYDISPLAY_DATE"
+            echo "prerelease=$EAZYDISPLAY_PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::$EAZYDISPLAY_LABEL — $EAZYDISPLAY_TRAIN ($EAZYDISPLAY_CODE, $EAZYDISPLAY_DATE)"
+
+      # Codes are compared within one channel: snapshots with snapshots, releases with releases. A build at or below
+      # the newest in its channel would read as older than what's out, so stop instead of publishing it. Below means
+      # main's history was rewritten; equal means this commit is out already.
+      #
+      # Unlike DPIP, a release shares its code with the snapshot of the same commit: the same code says they're the
+      # same build.
+      - name: Code must be above the last one published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.v.outputs.code }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          # `.body // ""`: a release without notes has a null body, which `capture` refuses.
+          previous="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq --argjson pre "$PRERELEASE" \
+            '[.[] | select(.prerelease == $pre) | (.body // "") | capture("<!--\\s*eazydisplay-build:\\s*(?<c>\\d+)") | .c | tonumber] | max // 0')"
+          echo "previous=$previous current=$CODE"
+          if [ "$CODE" -eq "$previous" ]; then
+            echo "::error::build $CODE is out already in this channel"
+            exit 1
+          elif [ "$CODE" -lt "$previous" ]; then
+            echo "::error::build $CODE is below the published $previous — was main's history rewritten?"
+            exit 1
+          fi
+
+      # Swift comes from mise.toml, the same pin every Mac uses, not whichever the runner's Xcode ships;
+      # scripts/build-app.sh runs it through `mise exec` too. The install is cached by mise-action, keyed on mise.toml.
+      - name: Install the Swift toolchain (mise)
+        uses: jdx/mise-action@v4
+
+      - name: Test
+        run: mise exec -- swift test
+
+      - name: Install the signing identity
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: scripts/ci-keychain.sh
+
+      - name: Build
+        env:
+          EAZYDISPLAY_LABEL: ${{ steps.v.outputs.label }}
+          EAZYDISPLAY_TRAIN: ${{ steps.v.outputs.train }}
+          EAZYDISPLAY_CODE: ${{ steps.v.outputs.code }}
+          EAZYDISPLAY_DATE: ${{ steps.v.outputs.date }}
+          EAZYDISPLAY_PRERELEASE: ${{ steps.v.outputs.prerelease }}
+          UPDATE_REPOSITORY: ${{ github.repository }}
+          ARCHIVE: "1"
+          # Notarized, a download opens without Gatekeeper's warning.
+          NOTARIZE: "1"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          scripts/build-app.sh
+          # An ad hoc signature can't be notarized, and Gatekeeper would refuse the download.
+          team="$(codesign -dv build/EazyDisplay.app 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+          if [ -z "$team" ] || [ "$team" = "not set" ]; then
+            echo "::error::the app isn't signed by a team"
+            exit 1
+          fi
+          # What a Mac decides on opening a download: it must be a notarized Developer ID app.
+          spctl --assess --type execute -vv build/EazyDisplay.app 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID" ||
+            { echo "::error::Gatekeeper doesn't accept the app as notarized"; exit 1; }
+
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ steps.v.outputs.label }}
+          CODE: ${{ steps.v.outputs.code }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            scripts/notes.sh "$LABEL" "$CODE" --release > NOTES.md
+          else
+            scripts/notes.sh "$LABEL" "$CODE" > NOTES.md
+          fi
+          cat NOTES.md
+
+      - name: Publish
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: ${{ steps.v.outputs.label }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            # The bare label. Only `v` tags are releases, so snapshots have a namespace of their own, and it's what
+            # scripts/version.sh counts for the next letter.
+            tag="$LABEL"
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+          gh release create "$tag" \
+            --title "$LABEL" \
+            --notes-file NOTES.md \
+            --prerelease="$PRERELEASE" \
+            "build/EazyDisplay-$LABEL.zip"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Here rather than in a workflow of its own listening on `release`: GitHub doesn't start a workflow for an
+      # event its own GITHUB_TOKEN caused, and the release above is created with that token.
+      - name: Announce on Discord
+        if: always() && steps.publish.outputs.tag != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.publish.outputs.tag }}
+        run: |
+          if [ -z "${DISCORD_WEBHOOK:-}" ]; then
+            echo "::notice::DISCORD_WEBHOOK is not set — nothing announced"
+            exit 0
+          fi
+          # A warning, not a failure: the release is out by now, and a red run would say it isn't.
+          python3 scripts/discord.py "$TAG" ||
+            echo "::warning::Discord announcement failed — the release itself is fine"
