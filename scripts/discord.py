@@ -18,8 +18,8 @@ import time
 import urllib.error
 import urllib.request
 
-REPO = os.environ.get("GITHUB_REPOSITORY", "ExpTechTW/EazyDisplay")
-DESCRIPTION_LIMIT = int(os.environ.get("EAZYDISPLAY_DISCORD_LIMIT", 4096))
+REPO = os.environ.get("GITHUB_REPOSITORY", "ExpTechTW/EasyDisplay")
+DESCRIPTION_LIMIT = int(os.environ.get("EASYDISPLAY_DISCORD_LIMIT", 4096))
 
 # The colours of the app's own badges, which tell the two apart at a glance in a busy channel.
 PRERELEASE_COLOUR = 0xE8A33D
@@ -32,7 +32,7 @@ def api(path: str) -> dict:
     Retried on 404: this runs seconds after `gh release create`, and the API can answer 404 for a moment for a
     release that certainly exists.
     """
-    fixture = os.environ.get("EAZYDISPLAY_RELEASE_JSON")
+    fixture = os.environ.get("EASYDISPLAY_RELEASE_JSON")
     if fixture:
         return json.loads(pathlib.Path(fixture).read_text())
 
@@ -157,7 +157,7 @@ def main() -> int:
         "footer": {"text": footer},
         "timestamp": release["published_at"],
     }
-    payload = {"username": "EazyDisplay", "embeds": [embed]}
+    payload = {"username": "EasyDisplay", "embeds": [embed]}
 
     if dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -176,7 +176,7 @@ def main() -> int:
         headers={
             "Content-Type": "application/json",
             # Discord answers 403 to urllib's default agent, with nothing that says why.
-            "User-Agent": f"EazyDisplay-release-notifier (+https://github.com/{REPO})",
+            "User-Agent": f"EasyDisplay-release-notifier (+https://github.com/{REPO})",
         },
     )
     try:

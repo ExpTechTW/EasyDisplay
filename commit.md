@@ -4,7 +4,7 @@
 的內容，所以一則寫壞的 commit 會在使用者讀得到的地方留下一個洞——而 commit 訊息推出去
 之後**改不了**，唯一的修法是 rebase。
 
-規則沿用 FreeAudio 的 `commit.md`（源自 DPIP），語系是 EazyDisplay 介面有的三種。
+規則沿用 FreeAudio 的 `commit.md`（源自 DPIP），語系是 EasyDisplay 介面有的三種。
 
 ---
 
@@ -98,7 +98,7 @@ New(zh-Hant): 內建螢幕可以增亮到 1000 nit
 | **必填** | `zh-Hant`、`en-US` |
 | 選填 | `ja-JP` |
 
-EazyDisplay 的介面只有這三種語言，gate 會擋其他語系。**各語言的條目數量要對得起來**：中文
+EasyDisplay 的介面只有這三種語言，gate 會擋其他語系。**各語言的條目數量要對得起來**：中文
 寫了兩則、英文只寫一則，英文讀者拿到的就是一份少一條的清單。
 
 `feat` / `fix` / `perf` **至少要有一行**；其他 type 通常不寫。

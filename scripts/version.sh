@@ -11,7 +11,7 @@
 # Names can't be compared: a snapshot named after a later week can come before the release it became. The code only
 # ever rises, so that's what the updater compares.
 #
-#   eval "$(scripts/version.sh)"      EAZYDISPLAY_LABEL, _TRAIN, _CODE, _DATE and _PRERELEASE
+#   eval "$(scripts/version.sh)"      EASYDISPLAY_LABEL, _TRAIN, _CODE, _DATE and _PRERELEASE
 #   scripts/version.sh --json
 #   scripts/version.sh --snapshot     a snapshot even if HEAD carries a release tag, as for a push to main
 #
@@ -107,6 +107,6 @@ if [ "$json" = 1 ]; then
   printf '{"label":"%s","train":"%s","code":%s,"date":"%s","prerelease":%s}\n' \
     "$label" "$train" "$code" "$date" "$prerelease"
 else
-  printf 'EAZYDISPLAY_LABEL=%s\nEAZYDISPLAY_TRAIN=%s\nEAZYDISPLAY_CODE=%s\nEAZYDISPLAY_DATE=%s\nEAZYDISPLAY_PRERELEASE=%s\n' \
+  printf 'EASYDISPLAY_LABEL=%s\nEASYDISPLAY_TRAIN=%s\nEASYDISPLAY_CODE=%s\nEASYDISPLAY_DATE=%s\nEASYDISPLAY_PRERELEASE=%s\n' \
     "$label" "$train" "$code" "$date" "$prerelease"
 fi

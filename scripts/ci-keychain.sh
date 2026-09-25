@@ -16,9 +16,9 @@ set -euo pipefail
 : "${APPLE_CERTIFICATE_PASSWORD:?set the APPLE_CERTIFICATE_PASSWORD repository secret}"
 : "${RUNNER_TEMP:?this runs on a GitHub runner}"
 
-keychain="$RUNNER_TEMP/eazydisplay-signing.keychain-db"
+keychain="$RUNNER_TEMP/easydisplay-signing.keychain-db"
 keychain_password="$(uuidgen)"
-p12="$RUNNER_TEMP/eazydisplay-signing.p12"
+p12="$RUNNER_TEMP/easydisplay-signing.p12"
 
 if ! printf '%s' "$APPLE_CERTIFICATE" | tr -d '[:space:]' | base64 --decode >"$p12" 2>/dev/null; then
   echo "::error::APPLE_CERTIFICATE isn't base64. Set it with scripts/set-apple-secrets.sh"

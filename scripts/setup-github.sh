@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up EazyDisplay's GitHub repository the way FreeAudio's is, and pushes main to it the first time:
+# Sets up EasyDisplay's GitHub repository the way FreeAudio's is, and pushes main to it the first time:
 #
 #   - public, rebase merges only: the commit gate skips merge commits, and a squash would fold every commit's changelog
 #     lines into one message (commit.md)
@@ -8,14 +8,14 @@
 #   - FreeAudio's labels, and none of GitHub's defaults
 #   - secret scanning with push protection, Dependabot alerts, private vulnerability reporting, CodeQL
 #
-#   scripts/setup-github.sh                 ExpTechTW/EazyDisplay
+#   scripts/setup-github.sh                 ExpTechTW/EasyDisplay
 #   scripts/setup-github.sh owner/repo
 #
 # Safe to run again: every step sets a state rather than adding to it. Secrets can't be copied from FreeAudio, since
 # GitHub never gives their values back; the last step names the ones still missing and how to set them.
 set -euo pipefail
 
-repo="${1:-ExpTechTW/EazyDisplay}"
+repo="${1:-ExpTechTW/EasyDisplay}"
 template=ExpTechTW/FreeAudio
 description="住在選單列的 macOS 螢幕亮度工具，可把 XDR 螢幕增亮到 1000 nit"
 cd "$(dirname "$0")/.."

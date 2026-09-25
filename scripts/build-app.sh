@@ -1,16 +1,16 @@
 #!/bin/zsh
-# Builds, bundles and signs build/EazyDisplay.app.
+# Builds, bundles and signs build/EasyDisplay.app.
 #
 #   scripts/build-app.sh              release build, signed with your Developer ID or Apple Development certificate
 #   CONFIG=debug scripts/build-app.sh
 #   SIGN_IDENTITY=- scripts/build-app.sh   ad-hoc signature
-#   ARCHIVE=1 scripts/build-app.sh    also zip it as build/EazyDisplay-<label>.zip, the file a GitHub release carries
+#   ARCHIVE=1 scripts/build-app.sh    also zip it as build/EasyDisplay-<label>.zip, the file a GitHub release carries
 #   NOTARIZE=1 scripts/build-app.sh   also have Apple notarize it, so a download opens without Gatekeeper's warning.
 #                                     Needs a Developer ID signature, APPLE_ID and APPLE_APP_SPECIFIC_PASSWORD (made at
 #                                     account.apple.com → Sign-In and Security → App-Specific Passwords); the team comes
 #                                     from the signature unless APPLE_TEAM_ID says otherwise.
 #
-# The version comes from scripts/version.sh; EAZYDISPLAY_LABEL/_TRAIN/_CODE/_DATE/_PRERELEASE override it (CI passes
+# The version comes from scripts/version.sh; EASYDISPLAY_LABEL/_TRAIN/_CODE/_DATE/_PRERELEASE override it (CI passes
 # the values it has checked). Without git history the build is `dev`, build 0.
 #
 # Swift is the one mise.toml pins, never whatever `swift` is first on the PATH: a build off another compiler looks
@@ -25,21 +25,21 @@ fi
 pinned() { mise exec -- "$@"; }
 
 CONFIG=${CONFIG:-release}
-BUNDLE_ID=${BUNDLE_ID:-io.github.yuyu1015.EazyDisplay}
+BUNDLE_ID=${BUNDLE_ID:-io.github.yuyu1015.EasyDisplay}
 # The GitHub repository (owner/name) releases are published to.
-UPDATE_REPOSITORY=${UPDATE_REPOSITORY:-ExpTechTW/EazyDisplay}
+UPDATE_REPOSITORY=${UPDATE_REPOSITORY:-ExpTechTW/EasyDisplay}
 # Apple silicon only: boost and the sensors are the Apple silicon display coprocessor's and SMC's.
 ARCHS=(${=ARCHS:-arm64})
-APP=build/EazyDisplay.app
+APP=build/EasyDisplay.app
 
-if [[ -z ${EAZYDISPLAY_CODE:-} ]] && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
+if [[ -z ${EASYDISPLAY_CODE:-} ]] && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
     eval "$(scripts/version.sh)"
 fi
-LABEL=${EAZYDISPLAY_LABEL:-dev}
-TRAIN=${EAZYDISPLAY_TRAIN:-0.0}
-CODE=${EAZYDISPLAY_CODE:-0}
-DATE=${EAZYDISPLAY_DATE:-}
-PRERELEASE=${EAZYDISPLAY_PRERELEASE:-true}
+LABEL=${EASYDISPLAY_LABEL:-dev}
+TRAIN=${EASYDISPLAY_TRAIN:-0.0}
+CODE=${EASYDISPLAY_CODE:-0}
+DATE=${EASYDISPLAY_DATE:-}
+PRERELEASE=${EASYDISPLAY_PRERELEASE:-true}
 [[ $PRERELEASE == true ]] && PRERELEASE_TAG="<true/>" || PRERELEASE_TAG="<false/>"
 
 ARCH_FLAGS=()
@@ -51,8 +51,8 @@ BIN=$(pinned swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN/EazyDisplay" "$APP/Contents/MacOS/EazyDisplay"
-cp -R "$BIN/EazyDisplay_EazyDisplay.bundle" "$APP/Contents/Resources/"
+cp "$BIN/EasyDisplay" "$APP/Contents/MacOS/EasyDisplay"
+cp -R "$BIN/EasyDisplay_EasyDisplay.bundle" "$APP/Contents/Resources/"
 cp Packaging/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -61,24 +61,24 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-    <key>CFBundleName</key><string>EazyDisplay</string>
-    <key>CFBundleDisplayName</key><string>EazyDisplay</string>
-    <key>CFBundleExecutable</key><string>EazyDisplay</string>
+    <key>CFBundleName</key><string>EasyDisplay</string>
+    <key>CFBundleDisplayName</key><string>EasyDisplay</string>
+    <key>CFBundleExecutable</key><string>EasyDisplay</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$TRAIN</string>
     <key>CFBundleVersion</key><string>$CODE</string>
-    <key>EazyDisplayLabel</key><string>$LABEL</string>
-    <key>EazyDisplayDate</key><string>$DATE</string>
-    <key>EazyDisplayPrerelease</key>$PRERELEASE_TAG
-    <key>EazyDisplayRepository</key><string>$UPDATE_REPOSITORY</string>
+    <key>EasyDisplayLabel</key><string>$LABEL</string>
+    <key>EasyDisplayDate</key><string>$DATE</string>
+    <key>EasyDisplayPrerelease</key>$PRERELEASE_TAG
+    <key>EasyDisplayRepository</key><string>$UPDATE_REPOSITORY</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hant</string><string>ja</string></array>
     <key>CFBundleAllowMixedLocalizations</key><true/>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
     <key>LSUIElement</key><true/>
-    <key>NSHumanReadableCopyright</key><string>EazyDisplay</string>
+    <key>NSHumanReadableCopyright</key><string>EasyDisplay</string>
 </dict>
 </plist>
 PLIST
@@ -107,7 +107,7 @@ if [[ -n ${NOTARIZE:-} ]]; then
     : "${APPLE_ID:?set APPLE_ID to notarize}" "${APPLE_APP_SPECIFIC_PASSWORD:?set APPLE_APP_SPECIFIC_PASSWORD to notarize}"
     TEAM=${APPLE_TEAM_ID:-$(codesign -dv "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')}
     CREDENTIALS=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$TEAM")
-    SUBMISSION=build/EazyDisplay-notarization.zip
+    SUBMISSION=build/EasyDisplay-notarization.zip
     rm -f "$SUBMISSION"
     ditto -c -k --keepParent "$APP" "$SUBMISSION"
     echo "Notarizing $APP (usually a few minutes)"
@@ -127,7 +127,7 @@ if [[ -n ${NOTARIZE:-} ]]; then
 fi
 
 if [[ -n ${ARCHIVE:-} ]]; then
-    ZIP=build/EazyDisplay-$LABEL.zip
+    ZIP=build/EasyDisplay-$LABEL.zip
     rm -f "$ZIP"
     ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
     echo "Archived $ZIP"

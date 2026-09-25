@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "EazyDisplay",
+    name: "EasyDisplay",
     defaultLocalization: "en",
     platforms: [.macOS(.v26)],
-    products: [.executable(name: "EazyDisplay", targets: ["EazyDisplay"])],
+    products: [.executable(name: "EasyDisplay", targets: ["EasyDisplay"])],
     targets: [
         .executableTarget(
-            name: "EazyDisplay",
+            name: "EasyDisplay",
             resources: [.process("Resources")],
             linkerSettings: [.linkedFramework("IOKit")]
         ),
-        .testTarget(name: "EazyDisplayTests", dependencies: ["EazyDisplay"]),
+        .testTarget(name: "EasyDisplayTests", dependencies: ["EasyDisplay"]),
     ]
 )

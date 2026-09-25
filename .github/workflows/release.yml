@@ -37,8 +37,8 @@ jobs:
               exit 1
             fi
             eval "$(scripts/version.sh)"
-            if [ "v$EAZYDISPLAY_LABEL" != "$GITHUB_REF_NAME" ]; then
-              echo "::error::$GITHUB_REF_NAME isn't the newest release tag on its commit (v$EAZYDISPLAY_LABEL is)"
+            if [ "v$EASYDISPLAY_LABEL" != "$GITHUB_REF_NAME" ]; then
+              echo "::error::$GITHUB_REF_NAME isn't the newest release tag on its commit (v$EASYDISPLAY_LABEL is)"
               exit 1
             fi
           else
@@ -46,13 +46,13 @@ jobs:
             eval "$(scripts/version.sh --snapshot)"
           fi
           {
-            echo "label=$EAZYDISPLAY_LABEL"
-            echo "train=$EAZYDISPLAY_TRAIN"
-            echo "code=$EAZYDISPLAY_CODE"
-            echo "date=$EAZYDISPLAY_DATE"
-            echo "prerelease=$EAZYDISPLAY_PRERELEASE"
+            echo "label=$EASYDISPLAY_LABEL"
+            echo "train=$EASYDISPLAY_TRAIN"
+            echo "code=$EASYDISPLAY_CODE"
+            echo "date=$EASYDISPLAY_DATE"
+            echo "prerelease=$EASYDISPLAY_PRERELEASE"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::$EAZYDISPLAY_LABEL — $EAZYDISPLAY_TRAIN ($EAZYDISPLAY_CODE, $EAZYDISPLAY_DATE)"
+          echo "::notice::$EASYDISPLAY_LABEL — $EASYDISPLAY_TRAIN ($EASYDISPLAY_CODE, $EASYDISPLAY_DATE)"
 
       # Codes are compared within one channel: snapshots with snapshots, releases with releases. A build at or below
       # the newest in its channel would read as older than what's out, so stop instead of publishing it. Below means
@@ -68,7 +68,7 @@ jobs:
         run: |
           # `.body // ""`: a release without notes has a null body, which `capture` refuses.
           previous="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq --argjson pre "$PRERELEASE" \
-            '[.[] | select(.prerelease == $pre) | (.body // "") | capture("<!--\\s*eazydisplay-build:\\s*(?<c>\\d+)") | .c | tonumber] | max // 0')"
+            '[.[] | select(.prerelease == $pre) | (.body // "") | capture("<!--\\s*easydisplay-build:\\s*(?<c>\\d+)") | .c | tonumber] | max // 0')"
           echo "previous=$previous current=$CODE"
           if [ "$CODE" -eq "$previous" ]; then
             echo "::error::build $CODE is out already in this channel"
@@ -94,11 +94,11 @@ jobs:
 
       - name: Build
         env:
-          EAZYDISPLAY_LABEL: ${{ steps.v.outputs.label }}
-          EAZYDISPLAY_TRAIN: ${{ steps.v.outputs.train }}
-          EAZYDISPLAY_CODE: ${{ steps.v.outputs.code }}
-          EAZYDISPLAY_DATE: ${{ steps.v.outputs.date }}
-          EAZYDISPLAY_PRERELEASE: ${{ steps.v.outputs.prerelease }}
+          EASYDISPLAY_LABEL: ${{ steps.v.outputs.label }}
+          EASYDISPLAY_TRAIN: ${{ steps.v.outputs.train }}
+          EASYDISPLAY_CODE: ${{ steps.v.outputs.code }}
+          EASYDISPLAY_DATE: ${{ steps.v.outputs.date }}
+          EASYDISPLAY_PRERELEASE: ${{ steps.v.outputs.prerelease }}
           UPDATE_REPOSITORY: ${{ github.repository }}
           ARCHIVE: "1"
           # Notarized, a download opens without Gatekeeper's warning.
@@ -109,13 +109,13 @@ jobs:
         run: |
           scripts/build-app.sh
           # An ad hoc signature can't be notarized, and Gatekeeper would refuse the download.
-          team="$(codesign -dv build/EazyDisplay.app 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+          team="$(codesign -dv build/EasyDisplay.app 2>&1 | sed -n 's/^TeamIdentifier=//p')"
           if [ -z "$team" ] || [ "$team" = "not set" ]; then
             echo "::error::the app isn't signed by a team"
             exit 1
           fi
           # What a Mac decides on opening a download: it must be a notarized Developer ID app.
-          spctl --assess --type execute -vv build/EazyDisplay.app 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID" ||
+          spctl --assess --type execute -vv build/EasyDisplay.app 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID" ||
             { echo "::error::Gatekeeper doesn't accept the app as notarized"; exit 1; }
 
       - name: Release notes
@@ -151,7 +151,7 @@ jobs:
             --title "$LABEL" \
             --notes-file NOTES.md \
             --prerelease="$PRERELEASE" \
-            "build/EazyDisplay-$LABEL.zip"
+            "build/EasyDisplay-$LABEL.zip"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # Here rather than in a workflow of its own listening on `release`: GitHub doesn't start a workflow for an

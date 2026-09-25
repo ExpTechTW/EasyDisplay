@@ -2,7 +2,7 @@
 # Writes a release's notes from the changelog lines its commits carry (see commit.md):
 #
 #   New(zh-Hant): 可以從 GitHub 自動更新
-#   New(en-US): EazyDisplay updates itself from GitHub
+#   New(en-US): EasyDisplay updates itself from GitHub
 #
 # A snapshot lists what changed since the previous published build. A release lists everything since the previous
 # release: someone going from 26.1 to 26.2 never saw the snapshots in between. Same format as DPIP's
@@ -14,7 +14,7 @@ set -euo pipefail
 label="${1:?usage: scripts/notes.sh <label> <code> [--release]}"
 code="${2:?usage: scripts/notes.sh <label> <code> [--release]}"
 kind="${3:-}"
-repo="${GITHUB_REPOSITORY:-ExpTechTW/EazyDisplay}"
+repo="${GITHUB_REPOSITORY:-ExpTechTW/EasyDisplay}"
 
 # Printed first and unfolded; every other language is folded underneath.
 readonly PRIMARY='zh-Hant'
@@ -158,5 +158,5 @@ section() { # <locale>
 
   # Invisible on the page. The release workflow checks a new build is above it, and an updater can compare it with
   # the build that's running.
-  printf '<!-- eazydisplay-build: %s -->\n' "$code"
+  printf '<!-- easydisplay-build: %s -->\n' "$code"
 }

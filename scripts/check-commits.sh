@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rejects a commit message the release notes can't be built from. The message is the changelog: scripts/notes.sh
 # publishes its entry lines, and a pushed message can only be fixed by rewriting history. The rules are in commit.md;
-# this is FreeAudio's gate (from DPIP's tool/check/commits.sh) with EazyDisplay's languages.
+# this is FreeAudio's gate (from DPIP's tool/check/commits.sh) with EasyDisplay's languages.
 #
 #   scripts/check-commits.sh                     HEAD
 #   scripts/check-commits.sh origin/main..HEAD   every commit in a range
@@ -24,7 +24,7 @@ readonly LINE_RE='^(New|Optimization|Fix)\(([A-Za-z]{2,3}(-[A-Za-z0-9]+)*)\):[[:
 
 # The app's own language, and the one everyone else falls back to.
 readonly REQUIRED_LOCALES='zh-Hant en-US'
-# The languages EazyDisplay ships (Sources/EazyDisplay/Resources). A misspelt one would publish a block nobody reads.
+# The languages EasyDisplay ships (Sources/EasyDisplay/Resources). A misspelt one would publish a block nobody reads.
 readonly KNOWN_LOCALES='zh-Hant en-US ja-JP'
 
 readonly SUMMARY_MAX=72

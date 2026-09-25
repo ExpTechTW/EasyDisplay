@@ -3,14 +3,14 @@
 # certificate exported from Keychain Access as a .p12. The certificate is checked first, the way CI will use it, so a
 # wrong file or password never reaches a release.
 #
-#   scripts/set-apple-secrets.sh DeveloperID.p12 ExpTechTW/EazyDisplay ExpTechTW/FreeAudio
-#   scripts/set-apple-secrets.sh --dry-run DeveloperID.p12 ExpTechTW/EazyDisplay     # checks it, sets nothing
+#   scripts/set-apple-secrets.sh DeveloperID.p12 ExpTechTW/EasyDisplay ExpTechTW/FreeAudio
+#   scripts/set-apple-secrets.sh --dry-run DeveloperID.p12 ExpTechTW/EasyDisplay     # checks it, sets nothing
 #
 # It asks for the .p12's password, then for the Apple ID and app-specific password notarization uses (made at
 # account.apple.com → Sign-In and Security → App-Specific Passwords). Leave the Apple ID empty to keep what each
 # repository has. The values go to gh on standard input, never on a command line.
 #
-# The names are the ones tauri-action reads, so EazyDisplay, FreeAudio and TREM-Lite share them:
+# The names are the ones tauri-action reads, so EasyDisplay, FreeAudio and TREM-Lite share them:
 #   APPLE_CERTIFICATE  APPLE_CERTIFICATE_PASSWORD  APPLE_TEAM_ID  APPLE_ID  APPLE_APP_SPECIFIC_PASSWORD
 set -euo pipefail
 
@@ -21,7 +21,7 @@ if [ "${1:-}" = --dry-run ]; then
 fi
 p12="${1:?usage: scripts/set-apple-secrets.sh [--dry-run] <certificate.p12> <owner/repo>...}"
 shift
-[ $# -gt 0 ] || { echo "name at least one repository, e.g. ExpTechTW/EazyDisplay" >&2; exit 2; }
+[ $# -gt 0 ] || { echo "name at least one repository, e.g. ExpTechTW/EasyDisplay" >&2; exit 2; }
 [ -s "$p12" ] || { echo "$p12 isn't a file" >&2; exit 1; }
 
 read -r -s -p "Password of $(basename "$p12"): " password
