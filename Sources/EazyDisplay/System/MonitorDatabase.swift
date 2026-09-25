@@ -111,12 +111,9 @@ struct BrightnessBand: Sendable, Identifiable, Equatable {
 struct MonitorDatabaseInfo: Sendable, Equatable {
     /// Seconds still stored one by one.
     var rawSeconds = 0
-    var rawBytes = 0
     var rawOldest: Date?
     /// Seconds summarized in the rollups.
     var rollupSeconds = 0
-    var rollupOldest: Date?
-    var fileBytes = 0
 }
 
 enum MonitorDatabaseError: Error, CustomStringConvertible {
@@ -355,7 +352,6 @@ final class SampleWriter: @unchecked Sendable {
 
 actor SampleReader {
     private let db: OpaquePointer
-    private let url: URL
     private let selectRaw: OpaquePointer
     private let series: OpaquePointer
     private let analysis: OpaquePointer
@@ -365,7 +361,6 @@ actor SampleReader {
     private let rollupInfo: OpaquePointer
 
     init(url: URL) throws {
-        self.url = url
         db = try openDatabase(url, flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX)
         try execute(db, "PRAGMA cache_size = -\(cacheKiB)")
         selectRaw = try prepare(db, "SELECT p, data FROM raw WHERE p >= ?1 AND p <= ?2 ORDER BY p")
@@ -400,11 +395,9 @@ actor SampleReader {
             GROUP BY 1
             """)
         rawInfo = try prepare(db, """
-            SELECT count(*), min(p), coalesce(sum(length(data)), 0),
-                   (SELECT coalesce(sum(n), 0) FROM rollup WHERE p IN (SELECT p FROM raw))
-            FROM raw
+            SELECT min(p), (SELECT coalesce(sum(n), 0) FROM rollup WHERE p IN (SELECT p FROM raw)) FROM raw
             """)
-        rollupInfo = try prepare(db, "SELECT min(p), coalesce(sum(n), 0) FROM rollup")
+        rollupInfo = try prepare(db, "SELECT coalesce(sum(n), 0) FROM rollup")
     }
 
     /// Every second recorded from `start` to `end`.
@@ -502,18 +495,13 @@ actor SampleReader {
         do {
             defer { sqlite3_reset(rawInfo) }
             guard sqlite3_step(rawInfo) == SQLITE_ROW else { throw error(db) }
-            info.rawOldest = periodStart(rawInfo, 1)
-            info.rawBytes = Int(sqlite3_column_int64(rawInfo, 2))
-            info.rawSeconds = Int(sqlite3_column_int64(rawInfo, 3))
+            info.rawOldest = periodStart(rawInfo, 0)
+            info.rawSeconds = Int(sqlite3_column_int64(rawInfo, 1))
         }
         do {
             defer { sqlite3_reset(rollupInfo) }
             guard sqlite3_step(rollupInfo) == SQLITE_ROW else { throw error(db) }
-            info.rollupOldest = periodStart(rollupInfo, 0)
-            info.rollupSeconds = Int(sqlite3_column_int64(rollupInfo, 1))
-        }
-        info.fileBytes = [url.path, url.path + "-wal"].reduce(0) { total, path in
-            total + ((try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0)
+            info.rollupSeconds = Int(sqlite3_column_int64(rollupInfo, 0))
         }
         return info
     }

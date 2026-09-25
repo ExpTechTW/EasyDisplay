@@ -181,9 +181,7 @@ struct BoostPage: View {
 struct MonitorPage: View {
     @Environment(DisplayManager.self) private var manager
     @Environment(AppSettings.self) private var settings
-    @Environment(\.locale) private var locale
     @State private var chart: MonitorChartModel?
-    @State private var info: MonitorDatabaseInfo?
     @State private var confirmingClear = false
 
     var body: some View {
@@ -208,18 +206,6 @@ struct MonitorPage: View {
                     Text(L("monitor.retention"))
                     Text(L("monitor.retention_hint"))
                 }
-                LabeledContent {
-                    Text(info.map(storage) ?? "—").monospacedDigit()
-                } label: {
-                    Text(L("monitor.storage"))
-                    Text(info.map(compression) ?? "")
-                }
-                if let oldest = info?.rollupOldest {
-                    LabeledContent(L("monitor.coverage"), value: oldest.formatted(date: .abbreviated, time: .shortened))
-                }
-                if let sensor = monitor.hottestSensor {
-                    LabeledContent(L("monitor.sensor"), value: sensor)
-                }
                 Button(L("monitor.clear"), role: .destructive) { confirmingClear = true }
                     .disabled(monitor.database == nil)
             } header: {
@@ -233,43 +219,15 @@ struct MonitorPage: View {
         }
         .confirmationDialog(L("monitor.clear_confirm"), isPresented: $confirmingClear) {
             Button(L("monitor.clear_action"), role: .destructive) {
-                Task {
-                    try? await monitor.database?.writer.clear()
-                    await refreshInfo()
-                }
+                Task { try? await monitor.database?.writer.clear() }
             }
         }
         .onAppear {
             if chart == nil { chart = MonitorChartModel(monitor: monitor, place: "settings") }
         }
-        .task {
-            // The database's size, now and then; it grows a little every few seconds.
-            while !Task.isCancelled {
-                await refreshInfo()
-                try? await Task.sleep(for: .seconds(10))
-            }
-        }
         .onChange(of: settings.monitorRetentionDays) {
-            Task {
-                await monitor.prune()
-                await refreshInfo()
-            }
+            Task { await monitor.prune() }
         }
-    }
-
-    private func storage(_ info: MonitorDatabaseInfo) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(info.fileBytes), countStyle: .file)
-    }
-
-    /// What a second of history costs on disk.
-    private func compression(_ info: MonitorDatabaseInfo) -> String {
-        guard info.rawSeconds > 0 else { return "" }
-        let perSecond = Double(info.rawBytes) / Double(info.rawSeconds)
-        return LF("monitor.bytes_per_second", perSecond.formatted(.number.precision(.fractionLength(1)).locale(locale)))
-    }
-
-    private func refreshInfo() async {
-        info = try? await manager.sensors.database?.reader.info()
     }
 }
 

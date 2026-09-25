@@ -112,7 +112,6 @@
 "monitor.boosted_key" = "ブースト中";
 "monitor.data" = "データ";
 "monitor.retention_days" = "%d 日";
-"monitor.sensor" = "温度センサ";
 "monitor.clear" = "モニタのデータを消去…";
 "monitor.clear_confirm" = "モニタのデータをすべて消去しますか？";
 "monitor.clear_action" = "消去";
@@ -130,8 +129,6 @@
 "monitor.system_power" = "システム電力";
 "monitor.range.month" = "30 日";
 "monitor.span.month" = "過去 30 日";
-"monitor.storage" = "データベースのサイズ";
-"monitor.bytes_per_second" = "記録 1 秒あたり約 %@ バイト";
 
 "analysis.title" = "分析";
 "analysis.period" = "期間";
@@ -160,7 +157,6 @@
 
 "monitor.retention" = "記録の保存期間";
 "monitor.retention_hint" = "毎秒のデータも要約も同じ期間保存し、それより古いものは削除します。1 日あたり約 400 KB です。";
-"monitor.coverage" = "記録の開始";
 "monitor.data_hint" = "明るさ・バックライトとシステムの電力・ディスプレイ温度・周囲の明るさ・ブーストの状態を毎秒記録し、5 分ごとに 1 件のバイナリデータに圧縮してこの Mac のデータベースに保存します。外部には送信しません。";
 "settings.boost_footer" = "ブーストは内蔵ディスプレイを P3-600 プリセットに切り替え、macOS の明るさを最大に固定してからバックライトを直接制御します。システムの明るさが最大なら、HDR コンテンツによる明るさの変化（ちらつきの原因）は起きません。オフにする、終了する、またはクラッシュ後に開き直すと、元のプリセット・明るさ・自動調節に戻ります。";
 "settings.keys" = "明るさキー";

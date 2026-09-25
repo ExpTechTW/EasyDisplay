@@ -25,7 +25,6 @@ final class SensorMonitor {
 
     private(set) var status = Status.starting
     private(set) var latest: SensorSample?
-    private(set) var hottestSensor: String?
     /// The last five minutes, oldest first.
     private(set) var recent: [SensorSample] = []
 
@@ -110,7 +109,6 @@ final class SensorMonitor {
     }
 
     private func sample(_ readings: SMCSensors.Readings?) -> SensorSample {
-        if hottestSensor != readings?.hottestSensor { hottestSensor = readings?.hottestSensor }
         let display = reading()
         let sample = SensorSample(
             time: .now,
@@ -150,7 +148,6 @@ private struct SMCSensors: Sendable {
         var systemWatts: Double?
         /// The hottest display sensor, which the thermal limit follows.
         var displayCelsius: Double?
-        var hottestSensor: String?
     }
 
     let smc: SMC
@@ -172,7 +169,6 @@ private struct SMCSensors: Sendable {
         for key in temperatures {
             guard let celsius = smc.read(key), (1...150).contains(celsius), celsius > readings.displayCelsius ?? 0 else { continue }
             readings.displayCelsius = celsius
-            readings.hottestSensor = key.name
         }
         return readings
     }

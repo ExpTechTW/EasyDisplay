@@ -112,7 +112,6 @@
 "monitor.boosted_key" = "增亮期間";
 "monitor.data" = "資料";
 "monitor.retention_days" = "%d 天";
-"monitor.sensor" = "溫度感測器";
 "monitor.clear" = "清除監測資料…";
 "monitor.clear_confirm" = "要清除所有監測資料嗎？";
 "monitor.clear_action" = "清除";
@@ -130,8 +129,6 @@
 "monitor.system_power" = "整機功耗";
 "monitor.range.month" = "30 天";
 "monitor.span.month" = "最近 30 天";
-"monitor.storage" = "資料庫大小";
-"monitor.bytes_per_second" = "每秒的紀錄約佔 %@ 位元組";
 
 "analysis.title" = "分析";
 "analysis.period" = "期間";
@@ -160,7 +157,6 @@
 
 "monitor.retention" = "紀錄保留";
 "monitor.retention_hint" = "逐秒資料和摘要都保留這麼久，超過的會刪除。每天約 400 KB。";
-"monitor.coverage" = "資料起始";
 "monitor.data_hint" = "每秒記錄亮度、背光與整機功耗、螢幕溫度、環境光和增亮狀態，每 5 分鐘壓縮成一筆二進位資料，存在這台 Mac 上的資料庫，不會傳到任何地方。";
 "settings.boost_footer" = "增亮會把內建螢幕切到 P3-600 模式、把 macOS 的亮度固定在最大，再直接控制背光；系統亮度在最大時，HDR 內容就不會觸發讓畫面閃爍的亮度漸變。關閉增亮、結束 app，或當機後重新開啟，都會還原原本的預設模式、亮度和自動亮度。";
 "settings.keys" = "亮度鍵";

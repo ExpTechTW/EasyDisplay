@@ -112,7 +112,6 @@
 "monitor.boosted_key" = "Boosted";
 "monitor.data" = "Data";
 "monitor.retention_days" = "%d days";
-"monitor.sensor" = "Temperature sensor";
 "monitor.clear" = "Clear Monitor Data…";
 "monitor.clear_confirm" = "Clear all monitor data?";
 "monitor.clear_action" = "Clear";
@@ -130,8 +129,6 @@
 "monitor.system_power" = "System power";
 "monitor.range.month" = "30 days";
 "monitor.span.month" = "Last 30 days";
-"monitor.storage" = "Database";
-"monitor.bytes_per_second" = "About %@ bytes per second of history";
 
 "analysis.title" = "Analysis";
 "analysis.period" = "Period";
@@ -160,7 +157,6 @@
 
 "monitor.retention" = "Keep history for";
 "monitor.retention_hint" = "Every second and its summaries alike; older is deleted. About 400 KB a day.";
-"monitor.coverage" = "History since";
 "monitor.data_hint" = "Brightness, backlight and system power, display temperature, ambient light and boost are recorded every second, compressed into one binary block per five minutes and kept in a database on this Mac. Nothing is sent anywhere.";
 "settings.boost_footer" = "Boost switches the built-in display to the P3-600 preset, pins macOS's brightness at its maximum and drives the backlight directly; with the system at maximum, HDR content can't start the brightness ramps that made the screen flicker. Turning boost off, quitting, or reopening after a crash restores the preset, brightness and auto-brightness you had.";
 "settings.keys" = "Brightness Keys";
