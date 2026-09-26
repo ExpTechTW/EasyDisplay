@@ -66,8 +66,12 @@ struct MetricSeries {
     struct Reading: Identifiable {
         let time: Date
         let stat: SeriesPoint.Stat
-        /// Readings with no gap between them share a segment; a gap (EasyDisplay wasn't running) breaks the line.
+        /// Readings in consecutive buckets share a segment, which is one line. A missing bucket (EasyDisplay wasn't
+        /// running, the Mac slept, the display was off) starts a new one: a line across it would show readings that
+        /// were never taken.
         let segment: Int
+        /// Alone in its segment, so drawn as a dot: a line needs two points.
+        var isolated = false
         var id: Date { time }
     }
 
@@ -75,6 +79,12 @@ struct MetricSeries {
     private(set) var low = Double.infinity
     private(set) var high = -Double.infinity
     private(set) var average = 0.0
+
+    /// Whether `next` follows `previous` without a missing bucket. Samples come once a second and one can land a
+    /// second late, skipping a one-second bucket without any time going unrecorded.
+    static func continues(from previous: Date, to next: Date, bucket: Int) -> Bool {
+        next.timeIntervalSince(previous) <= Double(bucket) + 1.5
+    }
 
     init(metric: Metric, points: [SeriesPoint], bucket: Int) {
         readings.reserveCapacity(points.count)
@@ -85,7 +95,7 @@ struct MetricSeries {
                 // A log axis has no zero; a pitch-dark room reads as 0.1 lux.
                 stat = SeriesPoint.Stat(average: max(stat.average, 0.1), minimum: max(stat.minimum, 0.1), maximum: max(stat.maximum, 0.1))
             }
-            if let previous, point.time.timeIntervalSince(previous) > Double(bucket * 3) { segment += 1 }
+            if let previous, !Self.continues(from: previous, to: point.time, bucket: bucket) { segment += 1 }
             previous = point.time
             readings.append(Reading(time: point.time, stat: stat, segment: segment))
             low = min(low, stat.minimum)
@@ -93,6 +103,11 @@ struct MetricSeries {
             sum += stat.average
         }
         if !readings.isEmpty { average = sum / Double(readings.count) }
+        for i in readings.indices {
+            let segment = readings[i].segment
+            readings[i].isolated = (i == 0 || readings[i - 1].segment != segment)
+                && (i == readings.count - 1 || readings[i + 1].segment != segment)
+        }
     }
 }
 
@@ -191,7 +206,7 @@ final class MonitorChartModel {
         var runs: [ClosedRange<Date>] = []
         var open: (start: Date, last: Date)?
         for point in points {
-            if point.boosted, let run = open, point.time.timeIntervalSince(run.last) <= step * 3 {
+            if point.boosted, let run = open, MetricSeries.continues(from: run.last, to: point.time, bucket: bucket) {
                 open = (run.start, point.time)
             } else {
                 if let run = open { runs.append(run.start...run.last.addingTimeInterval(step)) }

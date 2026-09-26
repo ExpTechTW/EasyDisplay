@@ -192,4 +192,17 @@ private func sample(_ second: Int, nits: Double? = 400, watts: Double? = 5, syst
         #expect(points[0].nits == SeriesPoint.Stat(average: 4.5, minimum: 0, maximum: 9))
         #expect(!points[1].boosted && points[2].boosted)
     }
+
+    @Test func aMissingBucketBreaksTheLine() {
+        func points(_ offsets: [Double]) -> [SeriesPoint] {
+            offsets.map { SeriesPoint(time: Date(timeIntervalSince1970: 1_800_000 + $0), nits: SeriesPoint.Stat(average: 300, minimum: 300, maximum: 300)) }
+        }
+        // A sample a second late skips one second; three seconds without one is a gap.
+        let seconds = MetricSeries(metric: .brightness, points: points([0, 1, 3, 6, 7]), bucket: 1)
+        #expect(seconds.readings.map(\.segment) == [0, 0, 0, 1, 1])
+        // One five-minute period missing is a gap too, and a reading left alone is drawn as a dot.
+        let periods = MetricSeries(metric: .brightness, points: points([0, 300, 900, 1500, 1800]), bucket: 300)
+        #expect(periods.readings.map(\.segment) == [0, 0, 1, 2, 2])
+        #expect(periods.readings.map(\.isolated) == [false, false, true, false, false])
+    }
 }

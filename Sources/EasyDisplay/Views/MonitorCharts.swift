@@ -246,6 +246,11 @@ private struct MetricPlot: View {
                 )
                 .foregroundStyle(metric.color)
                 .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                if reading.isolated {
+                    PointMark(x: .value("time", reading.time), y: .value(metric.unit, reading.stat.average))
+                        .foregroundStyle(metric.color)
+                        .symbolSize(16)
+                }
             }
         }
         .chartXScale(domain: model.start...model.end)
