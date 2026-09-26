@@ -130,7 +130,7 @@ open build/EasyDisplay.app
 
 macOS 的亮度固定在最大時，corebrightnessd 眼中的白色就是這個模式的 HDR 上限 600 nit，EDR headroom 維持 1。否則只要有 App 要求 HDR，corebrightnessd 就會開始 EDR 漸變：約 2 秒內不斷改寫背光並壓暗 SDR 像素，和 EasyDisplay 寫回背光互相拉扯，看起來就是閃爍。也因為亮度固定了，亮度鍵改由 EasyDisplay 自己處理。
 
-- **背光**：由 `BacklightDriver` 在自己的佇列上維持，不經過主執行緒。每秒 30 次讀取背光：被別的程式改寫（喚醒、切換模式、原彩顯示）就在一個週期內寫回，約 10–20 ms；螢幕關閉時不動作；前往新亮度時，在對數刻度上漸變一步。其他工作每秒隨感測器取樣做一次，滑桿與亮度鍵則立即生效。
+- **背光**：由 `BacklightDriver` 在自己的佇列上維持，不經過主執行緒。背光屬性每次改變，framebuffer 都會發出通知：被別的程式改寫（喚醒、切換模式、原彩顯示）時約 1 ms 內寫回，趕在畫面顯示之前。螢幕關閉時不動作，喚醒時直接回到之前的亮度；閒置變暗時跟著系統平順變暗。開啟增亮時先維持畫面上的亮度，EDR headroom 改變時跟著調整背光，讓白色不變；關閉增亮時等 corebrightnessd 調整完，再一次漸變到它的亮度。前往新亮度時，每秒 30 次在對數刻度上漸變一步；其他工作每秒隨感測器取樣做一次，滑桿與亮度鍵則立即生效。
 - **自動亮度**：corebrightnessd 的 `AggregatedLux` 在系統自動亮度關閉時仍會更新。`AmbientFilter`（仿 Android 的 AutomaticBrightnessController：快慢兩個平均、遲滯區間與延遲）決定要跟隨的環境光，再由亮度曲線換算亮度。曲線從 `AmbientLight.curve` 開始，每次調整都是該光線下的一個點（和 Android 9 以後相同）：點之間在對數尺度上內插，範圍外以高斯函數淡回預設，並從最新的點往外保持單調。
 - **為什麼是 1000 nit**：全白畫面時，面板在約 17.6 W、約 1100 nit 碰到功耗上限。停在 1000 nit，亮度就不會隨畫面內容改變。
 - **監測資料**：存在 `~/Library/Application Support/io.github.yuyu1015.EasyDisplay/Monitor.sqlite`。每 5 分鐘一筆二進位資料（Float16、差分、位元組平面、LZMA 壓縮，平均每秒約 4–6 位元組），另有每 5 分鐘的摘要，給長時間的圖表與分析使用。
