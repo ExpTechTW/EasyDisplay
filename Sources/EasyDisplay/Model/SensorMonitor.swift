@@ -4,6 +4,7 @@ import Observation
 
 /// What the built-in display is doing, read at each sample.
 struct DisplayReading: Sendable {
+    /// nil while the display is off: no brightness, rather than the last one.
     var nits: Double?
     var headroom: Double?
     var boosted = false

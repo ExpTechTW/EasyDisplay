@@ -80,7 +80,7 @@ final class BacklightDriver: @unchecked Sendable {
             goal = nits
             framebuffer.raiseOuterCaps(to: BuiltInDisplay.maxBoostNits)
             off = (framebuffer.nits(BuiltInFramebuffer.levelKey) ?? 0) < 0.5
-            if !off { framebuffer.drive(nits: nits) }
+            if off { send(.off) } else { framebuffer.drive(nits: nits) }
             guard timer == nil else { return }
             let timer = DispatchSource.makeTimerSource(queue: queue)
             timer.schedule(deadline: .now() + 1 / Self.ticksPerSecond, repeating: 1 / Self.ticksPerSecond, leeway: .milliseconds(4))

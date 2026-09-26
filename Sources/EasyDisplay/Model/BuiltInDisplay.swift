@@ -77,6 +77,8 @@ final class BuiltInDisplay: Identifiable {
     private(set) var measuredNits = 0.0
     /// While boosted: the backlight level, as the driver last reported it.
     private(set) var drivenNits = 0.0
+    /// The backlight is on. Off (display sleep, the lid closed), there's no brightness to record.
+    private(set) var isLit = true
     /// The ambient light level followed, while boosted.
     private(set) var lux: Double?
     /// A brightness just chosen with the slider or keys, shown at once and learned once it has settled.
@@ -216,8 +218,12 @@ final class BuiltInDisplay: Identifiable {
     }
 
     private func updateMeasuredNits() {
-        let nits = (framebuffer.nits(BuiltInFramebuffer.levelKey) ?? 0) / max(headroom, 1)
+        let level = framebuffer.nits(BuiltInFramebuffer.levelKey) ?? 0
+        let nits = level / max(headroom, 1)
         if nits != measuredNits { measuredNits = nits }
+        // The same threshold as the driver's: EasyDisplay's own lowest is 2 nits.
+        let lit = level >= 0.5
+        if lit != isLit { isLit = lit }
     }
 
     /// Follows macOS's own brightness ramp for a moment, ten times a second, so an indicator shows it settle.
@@ -357,8 +363,12 @@ final class BuiltInDisplay: Identifiable {
 
     private func driverReported(_ event: BacklightDriver.Event) {
         switch event {
-        case .off: log.info("backlight off; standing aside until it's back")
-        case .on: log.info("backlight back on; driving it again at \(self.drivenNits, format: .fixed(precision: 1)) nits")
+        case .off:
+            isLit = false
+            log.info("backlight off; standing aside until it's back")
+        case .on:
+            isLit = true
+            log.info("backlight back on; driving it again at \(self.drivenNits, format: .fixed(precision: 1)) nits")
         case .overwritten(let level): overwritten(level)
         }
     }

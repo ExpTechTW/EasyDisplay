@@ -26,7 +26,7 @@ final class DisplayManager {
         sensors.reading = { [weak self] in
             guard let self, let display = self.builtIn, self.builtInOnline else { return DisplayReading() }
             return DisplayReading(
-                nits: display.nits,
+                nits: display.isLit ? display.nits : nil,
                 headroom: display.headroom,
                 boosted: display.boost == .on,
                 thermalLimited: display.thermalLimited,
