@@ -6,6 +6,9 @@ import Observation
 struct DisplayReading: Sendable {
     /// nil while the display is off: no brightness, rather than the last one.
     var nits: Double?
+    /// Whether the display's temperature and the ambient light are measured now. Off (the lid closed, too), and for a
+    /// while after, they hold an old reading.
+    var sensorsAreCurrent = false
     var headroom: Double?
     var boosted = false
     var thermalLimited = false
@@ -116,8 +119,8 @@ final class SensorMonitor {
             nits: display.nits,
             backlightWatts: readings?.backlightWatts,
             systemWatts: readings?.systemWatts,
-            displayCelsius: readings?.displayCelsius,
-            lux: lux,
+            displayCelsius: display.sensorsAreCurrent ? readings?.displayCelsius : nil,
+            lux: display.sensorsAreCurrent ? lux : nil,
             headroom: display.headroom,
             boosted: display.boosted,
             thermalLimited: display.thermalLimited,

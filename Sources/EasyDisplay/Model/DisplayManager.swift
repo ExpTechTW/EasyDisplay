@@ -27,6 +27,7 @@ final class DisplayManager {
             guard let self, let display = self.builtIn, self.builtInOnline else { return DisplayReading() }
             return DisplayReading(
                 nits: display.isLit ? display.nits : nil,
+                sensorsAreCurrent: display.sensorsAreCurrent,
                 headroom: display.headroom,
                 boosted: display.boost == .on,
                 thermalLimited: display.thermalLimited,
