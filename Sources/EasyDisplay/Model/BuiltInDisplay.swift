@@ -383,7 +383,9 @@ final class BuiltInDisplay: Identifiable {
             log.info("backlight off; standing aside until it's back")
         case .on:
             setLit(true)
-            log.info("backlight back on; driving it again at \(self.drivenNits, format: .fixed(precision: 1)) nits")
+            log.info("backlight back on; driving it again where it was")
+        case .dimming: log.info("the system is dimming the display before it sleeps; following it down")
+        case .undimmed: log.info("the user is back; easing up from the dimmed level")
         case .overwritten(let level): overwritten(level)
         }
     }
@@ -431,10 +433,11 @@ final class BuiltInDisplay: Identifiable {
     private func enableBoost() async {
         boost = .enabling
         error = nil
-        // A display that's off has no brightness to start from (boost would start at the minimum, and learn it as the
-        // choice for this light), so boost waits for it to come on, e.g. when restored at launch.
+        // Boost starts from the brightness on screen, so it waits for someone to be looking at it. Off, or dimmed before
+        // display sleep, the display has nothing to start from: boost would start near the minimum, and learn that as
+        // the choice for this light. Restored at launch, that's until the user is back.
         updateMeasuredNits()
-        while !isLit {
+        while !isLit || BacklightDriver.userIdleSeconds >= BacklightDriver.idleBeforeDimming {
             try? await Task.sleep(for: .seconds(1))
             updateMeasuredNits()
         }
@@ -446,31 +449,44 @@ final class BuiltInDisplay: Identifiable {
         else {
             return failEnabling(L("boost.error_unresponsive"))
         }
-        updateMeasuredNits()
-        let startNits = max(measuredNits, Self.minBoostNits)
         var caps: [String: Int] = [:]
         for key in BuiltInFramebuffer.capKeys { caps[key] = framebuffer.raw(key) }
+        // Held where it is from here on. Turning auto-brightness off, switching the preset and pinning the slider each
+        // make corebrightnessd rewrite the backlight (pinned, towards 600 nits); every rewrite is put back before it
+        // shows. The white on screen stays as it is while the preset changes the headroom.
+        guard let level = driver.holdCurrent() else {
+            // Off again in the meantime: back to waiting.
+            boost = .off
+            return await enableBoost()
+        }
+        let startNits = max(level / max(headroom, 1), Self.minBoostNits)
         BoostRestoreState(presetIndex: current.index, slider: startSlider, autoBrightness: startAuto, caps: caps).save()
-
+        drivenNits = level
+        let holding = holdWhite(startNits)
         _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, false) }
         if current.index != sdr600.index {
             DisplayPresets.activate(index: sdr600.index, on: id)
+            // Pinned at once, so the preset's own slider shows as briefly as it can, and again once the switch, which
+            // resets the slider, is over.
+            _ = await withTimeout { [id] in DisplayServices.setBrightness(id, Self.pinnedSlider) }
             try? await Task.sleep(for: .seconds(2))
         }
-        // Pinned before the backlight is taken, so corebrightnessd's own ramp to it is over by then.
         _ = await withTimeout { [id] in DisplayServices.setBrightness(id, Self.pinnedSlider) }
         try? await Task.sleep(for: .milliseconds(800))
-        // Start from the brightness that was on screen; auto-brightness eases from there.
+        holding.cancel()
         slider = Self.slider(forBoostNits: startNits)
         resetFollowing()
-        drivenNits = startNits
-        steered = nil
-        driver.start(at: startNits)
         autoBrightness = false
         presetName = sdr600.name
         boost = .on
         settings.boostWasOn = true
-        log.info("boost on: preset \(current.name, privacy: .public) -> \(sdr600.name, privacy: .public), start \(startNits, format: .fixed(precision: 1)) nits")
+        // From the brightness on screen to where boost wants it (the learned curve, the thermal limit), eased as
+        // auto-brightness would.
+        let target = targetNits
+        let pace: BacklightDriver.Pace = target > startNits ? .brighten : .dim
+        steered = (target, pace)
+        driver.steer(to: target, pace: pace)
+        log.info("boost on: preset \(current.name, privacy: .public) -> \(sdr600.name, privacy: .public), from \(startNits, format: .fixed(precision: 1)) nits to \(target, format: .fixed(precision: 1))")
     }
 
     private func failEnabling(_ message: String) {
@@ -494,6 +510,23 @@ final class BuiltInDisplay: Identifiable {
         lastAutoMode = nil
     }
 
+    /// Keeps the white on screen at `white` nits while macOS changes the display's EDR headroom, until cancelled.
+    /// Pixels are scaled by 1 / headroom, so the backlight follows it: switching from a preset with headroom 1.2 to
+    /// one without would otherwise brighten the screen by as much at once.
+    private func holdWhite(_ white: Double) -> Task<Void, Never> {
+        Task {
+            var last = 0.0
+            while !Task.isCancelled {
+                let headroom = max(headroom, 1)
+                if abs(headroom - last) > 0.005 {
+                    last = headroom
+                    driver.steer(to: white * headroom, pace: .quick)
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+
     /// Undoes a boost, or one left behind by a crash or force-quit: at launch, when boost is turned off, and at quit.
     func restoreLeftoverBoost() async {
         guard boost != .disabling, let state = BoostRestoreState.load() else { return }
@@ -504,18 +537,27 @@ final class BuiltInDisplay: Identifiable {
 
     private func restore(_ state: BoostRestoreState) async {
         log.info("restoring preset #\(state.presetIndex), slider \(state.slider, format: .fixed(precision: 3)), auto \(state.autoBrightness)")
-        driver.stop()
-        for key in BuiltInFramebuffer.capKeys.reversed() {
-            if let raw = state.caps[key] { framebuffer.setRaw(key, raw) }
-        }
+        // Held where it is while macOS's own brightness is put back, then eased over to it, so nothing jumps. A boost
+        // left behind by a crash is taken from where it is.
+        let holding = driver.holdCurrent().map { holdWhite($0 / max(headroom, 1)) }
+        defer { holding?.cancel() }
         DisplayPresets.activate(index: state.presetIndex, on: id)
         try? await Task.sleep(for: .seconds(2))
-        // Switching presets resets the slider, so the slider is restored last. Nudging it makes
-        // corebrightnessd recompute and rewrite the backlight level.
+        // Switching presets resets the slider, so the slider is restored last.
         _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, state.autoBrightness) }
-        _ = await withTimeout { [id] in DisplayServices.setBrightness(id, max(0, state.slider - 0.05)) }
-        try? await Task.sleep(for: .milliseconds(300))
         _ = await withTimeout { [id] in DisplayServices.setBrightness(id, state.slider) }
+        try? await Task.sleep(for: .milliseconds(500))
+        if await !driver.handOver() {
+            // Nothing from corebrightnessd to ease to (the display is off, or it never wrote the backlight): its old
+            // cap back, and a nudge of the slider makes it write the level again.
+            if let raw = state.caps[BuiltInFramebuffer.backlightCapKey] { framebuffer.setRaw(BuiltInFramebuffer.backlightCapKey, raw) }
+            _ = await withTimeout { [id] in DisplayServices.setBrightness(id, max(0, state.slider - 0.05)) }
+            try? await Task.sleep(for: .milliseconds(300))
+            _ = await withTimeout { [id] in DisplayServices.setBrightness(id, state.slider) }
+        }
+        for key in [BuiltInFramebuffer.physicalLimitKey, BuiltInFramebuffer.indicatorCapKey] {
+            if let raw = state.caps[key], raw != framebuffer.raw(key) { framebuffer.setRaw(key, raw) }
+        }
         BoostRestoreState.clear()
     }
 }
