@@ -431,6 +431,13 @@ final class BuiltInDisplay: Identifiable {
     private func enableBoost() async {
         boost = .enabling
         error = nil
+        // A display that's off has no brightness to start from (boost would start at the minimum, and learn it as the
+        // choice for this light), so boost waits for it to come on, e.g. when restored at launch.
+        updateMeasuredNits()
+        while !isLit {
+            try? await Task.sleep(for: .seconds(1))
+            updateMeasuredNits()
+        }
         guard let sdr600 = DisplayPresets.sdr600(for: id), let current = DisplayPresets.active(for: id) else {
             return failEnabling(L("boost.error_preset"))
         }
