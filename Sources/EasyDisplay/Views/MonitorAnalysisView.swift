@@ -31,13 +31,19 @@ struct MonitorAnalysisSection: View {
         var end: Date
     }
 
-    let database: MonitorDatabase?
+    let monitor: SensorMonitor
     @Environment(\.locale) private var locale
     @AppStorage("analysis.period") private var period = Period.week
     @State private var result: Result?
 
-    init(database: MonitorDatabase?) {
-        self.database = database
+    init(monitor: SensorMonitor) {
+        self.monitor = monitor
+    }
+
+    /// What the analysis is of: reloaded when either changes.
+    private struct Source: Equatable {
+        let period: Period
+        let historyVersion: Int
     }
 
     var body: some View {
@@ -98,7 +104,7 @@ struct MonitorAnalysisSection: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .task(id: period) {
+        .task(id: Source(period: period, historyVersion: monitor.historyVersion)) {
             while !Task.isCancelled {
                 await load()
                 try? await Task.sleep(for: .seconds(30))
@@ -107,7 +113,7 @@ struct MonitorAnalysisSection: View {
     }
 
     private func load() async {
-        guard let reader = database?.reader else { return }
+        guard let reader = monitor.database?.reader else { return }
         let now = Date.now, start = period.start(now: now)
         let offset = TimeZone.current.secondsFromGMT(for: now)
         do {

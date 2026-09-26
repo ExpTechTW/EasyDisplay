@@ -197,7 +197,7 @@ struct MonitorPage: View {
                 }
             }
 
-            MonitorAnalysisSection(database: monitor.database)
+            MonitorAnalysisSection(monitor: monitor)
 
             Section {
                 Picker(selection: $settings.monitorRetentionDays) {
@@ -219,7 +219,7 @@ struct MonitorPage: View {
         }
         .confirmationDialog(L("monitor.clear_confirm"), isPresented: $confirmingClear) {
             Button(L("monitor.clear_action"), role: .destructive) {
-                Task { try? await monitor.database?.writer.clear() }
+                Task { await monitor.clearHistory() }
             }
         }
         .onAppear {

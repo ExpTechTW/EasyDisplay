@@ -31,6 +31,8 @@ final class SensorMonitor {
     private(set) var latest: SensorSample?
     /// The last five minutes, oldest first.
     private(set) var recent: [SensorSample] = []
+    /// Goes up whenever recorded history is removed, so whatever shows it reloads at once.
+    private(set) var historyVersion = 0
 
     @ObservationIgnored let database: MonitorDatabase?
     @ObservationIgnored var reading: @MainActor () -> DisplayReading = { DisplayReading() }
@@ -91,6 +93,18 @@ final class SensorMonitor {
         } catch {
             log.error("prune failed: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    /// Removes every recorded second and summary, on disk and in memory.
+    func clearHistory() async {
+        do {
+            try await database?.writer.clear()
+            log.info("monitor data cleared")
+        } catch {
+            log.error("clearing monitor data failed: \(String(describing: error), privacy: .public)")
+        }
+        recent.removeAll()
+        historyVersion += 1
     }
 
     /// Writes the seconds not yet on disk; at quit.

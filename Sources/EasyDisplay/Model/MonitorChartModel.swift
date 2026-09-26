@@ -140,6 +140,7 @@ final class MonitorChartModel {
     @ObservationIgnored private let storageKey: String
     @ObservationIgnored private var lastRefresh = Date.distantPast
     @ObservationIgnored private var inFlight = false
+    @ObservationIgnored private var historyVersion = 0
 
     /// `place` keeps the tray's and Settings' ranges apart. Both start at five minutes.
     init(monitor: SensorMonitor, place: String, ranges: [MonitorRange] = MonitorRange.allCases) {
@@ -168,6 +169,12 @@ final class MonitorChartModel {
     }
 
     func refreshIfDue(now: Date = .now) async {
+        // History that was cleared is gone from the charts at once, not at the range's next refresh.
+        if monitor.historyVersion != historyVersion {
+            historyVersion = monitor.historyVersion
+            show([])
+            lastRefresh = .distantPast
+        }
         guard !inFlight, now.timeIntervalSince(lastRefresh) >= range.refreshInterval - 0.05 else { return }
         inFlight = true
         defer { inFlight = false }

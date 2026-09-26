@@ -143,7 +143,9 @@ private struct Refresher: View {
     let model: MonitorChartModel
 
     var body: some View {
-        Color.clear.task(id: monitor.latest?.time) { await model.refreshIfDue() }
+        Color.clear
+            .task(id: monitor.latest?.time) { await model.refreshIfDue() }
+            .task(id: monitor.historyVersion) { await model.refreshIfDue() }
     }
 }
 
