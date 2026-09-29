@@ -9,7 +9,9 @@ struct AmbientFilter: Sendable {
     static let slowWindow: TimeInterval = 10
     static let brightenRatio = 1.10
     static let darkenRatio = 0.80
-    /// Around a dark room's 1 lux, a ratio alone would react to every flicker of the sensor.
+    /// Around a dark room's 1 lux, a ratio alone would react to every flicker of the sensor. Darkening, the step is at
+    /// most half the level followed: under 2 lux a full lux would never be reached, and a room gone dark would be
+    /// followed as the dim light it was before.
     static let minimumStep = 1.0
     static let brightenDebounce: TimeInterval = 4
     static let darkenDebounce: TimeInterval = 8
@@ -48,7 +50,7 @@ struct AmbientFilter: Sendable {
             return time.timeIntervalSince(since) >= Self.brightenDebounce && commit(fast)
         }
         let darker = max(fast, slow)
-        if darker <= current * Self.darkenRatio, darker <= current - Self.minimumStep {
+        if darker <= current * Self.darkenRatio, darker <= current - min(Self.minimumStep, current / 2) {
             let since = darkenSince ?? time
             darkenSince = since
             brightenSince = nil

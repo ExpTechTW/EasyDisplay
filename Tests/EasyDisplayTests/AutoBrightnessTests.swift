@@ -53,6 +53,15 @@ struct AmbientFilterTests {
         let changes = feed(&filter, 1.2, from: 1, seconds: 30, base: base)
         #expect(changes.isEmpty)
     }
+
+    @Test func aRoomGoingDarkIsFollowedToDark() {
+        var filter = AmbientFilter()
+        let base = Date(timeIntervalSince1970: 0)
+        _ = filter.add(0.76, at: base)
+        // The lights go out: 0 lux is less than a lux below 0.76, but it's a room gone dark, not noise.
+        _ = feed(&filter, 0, from: 1, seconds: 30, base: base)
+        #expect((filter.ambient ?? 1) < 0.05)
+    }
 }
 
 struct AutoBrightnessCurveTests {
