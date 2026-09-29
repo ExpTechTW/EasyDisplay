@@ -133,6 +133,13 @@ final class BacklightDriver: @unchecked Sendable {
     private var interference: Interference?
     /// A burst of writes elsewhere ends once none has come for this long.
     private static let interferenceGap: UInt64 = 1_000_000_000
+    /// Until then, the backlight is read every `closeCheck` instead of waiting for the framebuffer's messages.
+    private var closeWatchUntil: UInt64 = 0
+    private var closeWatching = false
+    /// When the backlight was last seen as ours, while watching closely: a write elsewhere found now showed since then.
+    private var lastSeenOurs: UInt64 = 0
+    /// Between two reads while watching closely. A read takes about 10 µs, a write about 280.
+    private static let closeCheck: useconds_t = 100
 
     init(
         framebuffer: BuiltInFramebuffer,
@@ -168,6 +175,17 @@ final class BacklightDriver: @unchecked Sendable {
             listen()
             schedule()
             return level
+        }
+    }
+
+    /// Watches the backlight closely for `seconds`: while macOS switches presets or its slider, corebrightnessd writes
+    /// the backlight about a hundred times a second, and the framebuffer's messages about it can come many
+    /// milliseconds late. Read every 0.1 ms instead, a write elsewhere is undone before its paired cap or level write
+    /// lands, so it doesn't show, or shows for a fraction of a millisecond. It costs a fifth of a core while it lasts.
+    func watchClosely(for seconds: Double) {
+        queue.async { [self] in
+            closeWatchUntil = max(closeWatchUntil, DispatchTime.now().uptimeNanoseconds + UInt64(seconds * 1e9))
+            watchCloselyNow()
         }
     }
 
@@ -210,6 +228,29 @@ final class BacklightDriver: @unchecked Sendable {
 
     // MARK: - On the queue
 
+    /// Reads the backlight every 0.1 ms until `closeWatchUntil`, from a thread of its own: each read is a moment on the
+    /// queue, which stays free for everything else in between (the timer's easing, the main thread's calls).
+    private func watchCloselyNow() {
+        guard !closeWatching, state != .stopped else { return }
+        closeWatching = true
+        lastSeenOurs = DispatchTime.now().uptimeNanoseconds
+        let thread = Thread { [self] in
+            while queue.sync(execute: { () -> Bool in
+                guard state != .stopped, DispatchTime.now().uptimeNanoseconds < closeWatchUntil else {
+                    closeWatching = false
+                    return false
+                }
+                check()
+                return true
+            }) {
+                usleep(Self.closeCheck)
+            }
+        }
+        thread.name = "EasyDisplay.backlight.watch"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+    }
+
     /// Where the level is going: the goal, or corebrightnessd's level once it has settled while handing over, and never
     /// above the system's dimming.
     private var target: Double {
@@ -238,10 +279,15 @@ final class BacklightDriver: @unchecked Sendable {
             report()
             send(.on)
             schedule()
+            closeWatchUntil = max(closeWatchUntil, DispatchTime.now().uptimeNanoseconds + 2_000_000_000)
+            watchCloselyNow()
             return
         }
         let cap = framebuffer.nits(BuiltInFramebuffer.backlightCapKey) ?? level
-        guard abs(level - current) > 0.5 || abs(cap - current) > 0.5 else { return }
+        guard abs(level - current) > 0.5 || abs(cap - current) > 0.5 else {
+            lastSeenOurs = DispatchTime.now().uptimeNanoseconds
+            return
+        }
         // The message arrives after the write; the cap read with the level says whether it showed.
         let now = DispatchTime.now().uptimeNanoseconds
         let previous = foreign
@@ -249,7 +295,9 @@ final class BacklightDriver: @unchecked Sendable {
         followDimming(level, previous: previous, now: now)
         let held = current
         retake()
-        record(level: level, cap: cap, held: held, landed: now)
+        // Watching closely, it showed at most since the last read that found it ours; otherwise, from when it was seen.
+        record(level: level, cap: cap, held: held, landed: closeWatching ? lastSeenOurs : now)
+        lastSeenOurs = DispatchTime.now().uptimeNanoseconds
         if dimmedTo == nil, now - overwriteReportedAt >= Self.overwriteReportInterval {
             overwriteReportedAt = now
             send(.overwritten(level))
@@ -364,10 +412,11 @@ final class BacklightDriver: @unchecked Sendable {
         return true
     }
 
-    /// Writes the level back, with the outer caps, which a preset switch or wake may have lowered.
+    /// Writes the level back, the backlight cap first: with our cap back, a higher level written elsewhere no longer
+    /// shows. Then the outer caps, which a preset switch or wake may have lowered.
     private func retake() {
-        framebuffer.raiseOuterCaps(to: BuiltInDisplay.maxBoostNits)
         framebuffer.drive(nits: current)
+        framebuffer.raiseOuterCaps(to: BuiltInDisplay.maxBoostNits)
     }
 
     /// 30 times a second while moving or handing over, or without the framebuffer's messages; otherwise twice a

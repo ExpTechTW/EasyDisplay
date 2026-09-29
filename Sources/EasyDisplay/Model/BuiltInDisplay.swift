@@ -504,6 +504,7 @@ final class BuiltInDisplay: Identifiable {
             boost = .off
             return await enableBoost()
         }
+        driver.watchClosely(for: 5)
         let startNits = max(level / max(headroom, 1), Self.minBoostNits)
         BoostRestoreState(presetIndex: current.index, slider: startSlider, autoBrightness: startAuto, caps: caps).save()
         drivenNits = level
@@ -586,6 +587,8 @@ final class BuiltInDisplay: Identifiable {
         // left behind by a crash is taken from where it is.
         let holding = driver.holdCurrent().map { holdWhite($0 / max(headroom, 1)) }
         defer { holding?.cancel() }
+        // Until the hand-over is done, at most 2 + 0.5 + 6 + 1.5 seconds.
+        driver.watchClosely(for: 11)
         DisplayPresets.activate(index: state.presetIndex, on: id)
         try? await Task.sleep(for: .seconds(2))
         // Switching presets resets the slider, so the slider is restored last.
