@@ -83,6 +83,8 @@ EasyDisplay 是住在選單列的 macOS 螢幕亮度工具。MacBook Pro 的 Liq
 
 EasyDisplay 在啟動時與之後每 6 小時檢查一次更新，有新版本時會通知你；也可以在「設定 › 軟體更新」按「立即檢查」。選單列圖示被收起來時，再次打開 EasyDisplay（從 Finder 或 Spotlight）就會顯示設定視窗。
 
+遇到問題時，可以在「設定 › 一般 › 日誌」按「打開資料夾」，把最近幾天的日誌附在[問題回報](https://github.com/ExpTechTW/EasyDisplay/issues)裡。
+
 ### 正式版與測試版
 
 | | 名稱 | 發布時機 |
@@ -134,7 +136,7 @@ macOS 的亮度固定在最大時，corebrightnessd 眼中的白色就是這個�
 - **自動亮度**：corebrightnessd 的 `AggregatedLux` 在系統自動亮度關閉時仍會更新。`AmbientFilter`（仿 Android 的 AutomaticBrightnessController：快慢兩個平均、遲滯區間與延遲）決定要跟隨的環境光，再由亮度曲線換算亮度。曲線從 `AmbientLight.curve` 開始，每次調整都是該光線下的一個點（和 Android 9 以後相同）：點之間在對數尺度上內插，範圍外以高斯函數淡回預設，並從最新的點往外保持單調。
 - **為什麼是 1000 nit**：全白畫面時，面板在約 17.6 W、約 1100 nit 碰到功耗上限。停在 1000 nit，亮度就不會隨畫面內容改變。
 - **監測資料**：存在 `~/Library/Application Support/io.github.yuyu1015.EasyDisplay/Monitor.sqlite`。每 5 分鐘一筆二進位資料（Float16、差分、位元組平面、LZMA 壓縮，平均每秒約 4–6 位元組），另有每 5 分鐘的摘要，給長時間的圖表與分析使用。
-- **日誌**：`log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'`
+- **日誌**：存在 `~/Library/Application Support/io.github.yuyu1015.EasyDisplay/logs/YYYY/MM/DD/HH.log`，每小時一個檔案，每行是 `[時:分:秒.毫秒][等級][分類]: 內容`，保留最近 3 天。同樣的內容也送到系統日誌，可以用 `log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'` 即時查看。
 
 | 檔案 | 內容 |
 |---|---|

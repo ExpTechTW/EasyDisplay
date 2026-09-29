@@ -69,6 +69,7 @@ final class ExternalDisplay: Identifiable {
 
     private func detectControl() async {
         if (await withTimeout { [id] in DisplayServices.canChangeBrightness(id) }) == true {
+            Log.info("display", "\(name) 透過系統控制亮度")
             control = .displayServices
             writer = LatestValueWriter { [id] value in
                 _ = await withTimeout { DisplayServices.setBrightness(id, value) }
@@ -78,10 +79,12 @@ final class ExternalDisplay: Identifiable {
         guard let channel = DDCChannel.channel(for: id),
               let value = await channel.read(DDCChannel.brightnessVCP), value.maximum > 0
         else {
+            Log.warn("display", "\(name) 不支援亮度控制（沒有 DDC/CI 回應）")
             control = .unsupported
             return
         }
         let maximum = value.maximum
+        Log.info("display", "\(name) 透過 DDC/CI 控制亮度（目前 \(value.current)/\(maximum)）")
         control = .ddc(channel, maximum: maximum)
         writer = LatestValueWriter { value in
             _ = await channel.write(DDCChannel.brightnessVCP, Int((value * Double(maximum)).rounded()))

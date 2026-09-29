@@ -201,7 +201,7 @@ final class MonitorChartModel {
             end = now
             show(points)
         } catch {
-            log.error("chart query failed: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "讀取圖表資料失敗：\(error)")
         }
     }
 

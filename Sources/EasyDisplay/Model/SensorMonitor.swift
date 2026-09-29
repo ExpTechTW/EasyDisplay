@@ -56,7 +56,7 @@ final class SensorMonitor {
             sensors = await Task.detached(priority: .utility) { SMCSensors() }.value
             if let sensors {
                 status = .running
-                log.info("sensors: PDBR \(sensors.backlight != nil), PSTR \(sensors.system != nil), \(sensors.temperatures.count) TD* keys")
+                Log.info("sensor", "感測器：背光功耗 PDBR \(sensors.backlight != nil ? "有" : "無")、整機功耗 PSTR \(sensors.system != nil ? "有" : "無")、螢幕溫度 TD* \(sensors.temperatures.count) 個")
                 if let database {
                     let now = Date.now
                     recent = (try? await database.reader.samples(from: now.addingTimeInterval(-Self.recentWindow), to: now)) ?? []
@@ -89,9 +89,9 @@ final class SensorMonitor {
         let now = Date.now, keep = retention()
         do {
             let removed = try await database.writer.prune(rawBefore: now.addingTimeInterval(-keep.raw), rollupBefore: now.addingTimeInterval(-keep.rollup))
-            if removed > 0 { log.info("pruned \(removed) periods") }
+            if removed > 0 { Log.info("monitor", "刪除 \(removed) 段超過保留期限的監測資料") }
         } catch {
-            log.error("prune failed: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "刪除舊監測資料失敗：\(error)")
         }
     }
 
@@ -99,9 +99,9 @@ final class SensorMonitor {
     func clearHistory() async {
         do {
             try await database?.writer.clear()
-            log.info("monitor data cleared")
+            Log.info("monitor", "清除監測資料")
         } catch {
-            log.error("clearing monitor data failed: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "清除監測資料失敗：\(error)")
         }
         recent.removeAll()
         historyVersion += 1
@@ -112,7 +112,7 @@ final class SensorMonitor {
         do {
             try database?.writer.flush()
         } catch {
-            log.error("flush failed: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "寫入最後的監測資料失敗：\(error)")
         }
     }
 

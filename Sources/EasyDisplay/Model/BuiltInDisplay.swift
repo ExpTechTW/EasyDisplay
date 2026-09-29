@@ -292,13 +292,16 @@ final class BuiltInDisplay: Identifiable {
         }
         if thermalLimited != wasLimited {
             wasLimited = thermalLimited
-            log.info("thermal ceiling \(self.thermalLimited ? "on" : "off", privacy: .public) at \(self.celsius ?? 0, format: .fixed(precision: 1)) °C: \(self.thermalCeiling, format: .fixed(precision: 0)) nits")
+            let shown = String(format: "%.1f", celsius ?? 0)
+            Log.info("thermal", thermalLimited
+                ? "螢幕 \(shown) °C，增亮上限降到 \(Int(thermalCeiling)) nit"
+                : "螢幕 \(shown) °C，上限 \(Int(thermalCeiling)) nit，不再限制亮度")
         }
         guard boost == .on, let reading = sample.lux else { return }
         let first = lux == nil
         if ambient.add(reading, at: sample.time), let followed = ambient.ambient {
             lux = followed
-            log.debug("ambient light now \(followed, format: .fixed(precision: 1)) lux")
+            Log.info("auto", "環境光改為 \(String(format: "%.1f", followed)) lux")
         }
         // Nothing learned for this lighting yet: the brightness on screen when boost started is the first choice,
         // so turning boost on never dims the display towards a default the user never picked.
@@ -350,12 +353,13 @@ final class BuiltInDisplay: Identifiable {
         guard let manual = manualNits, Date.now.timeIntervalSince(lastManualChange) >= Self.learnAfter else { return }
         if followsAmbient, let lux {
             settings.autoCurve.learn(lux: lux, nits: manual)
-            log.info("learned \(manual, format: .fixed(precision: 0)) nits at \(lux, format: .fixed(precision: 1)) lux")
+            Log.info("auto", "記住 \(String(format: "%.1f", lux)) lux 時選的亮度 \(Int(manual.rounded())) nit")
         }
         manualNits = nil
     }
 
     func resetLearning() {
+        Log.info("auto", "忘記所有學到的亮度（\(settings.autoCurve.points.count) 個）")
         settings.autoCurve.reset()
         manualNits = nil
         steer()
@@ -385,12 +389,12 @@ final class BuiltInDisplay: Identifiable {
         switch event {
         case .off:
             setLit(false)
-            log.info("backlight off; standing aside until it's back")
+            Log.info("backlight", "背光關閉（螢幕休眠、闔上或鎖定），等系統重新點亮")
         case .on:
             setLit(true)
-            log.info("backlight back on; driving it again where it was")
-        case .dimming: log.info("the system is dimming the display before it sleeps; following it down")
-        case .undimmed: log.info("the user is back; easing up from the dimmed level")
+            Log.info("backlight", "背光重新點亮，回到原本的亮度")
+        case .dimming: Log.info("backlight", "系統在螢幕休眠前調暗，跟著變暗")
+        case .undimmed: Log.info("backlight", "使用者回來了，從調暗的亮度調回")
         case .overwritten(let level): overwritten(level)
         }
     }
@@ -401,7 +405,7 @@ final class BuiltInDisplay: Identifiable {
     private func overwritten(_ level: Double) {
         retakes += 1
         if Date.now.timeIntervalSince(lastRetakeLog) > 5 {
-            log.info("backlight set to \(level, format: .fixed(precision: 1)) nits elsewhere (\(self.retakes) times since the last note); kept at \(self.drivenNits, format: .fixed(precision: 1)) nits")
+            Log.info("backlight", "背光被其他程式改成 \(String(format: "%.1f", level)) nit（距上次紀錄共 \(retakes) 次），維持在 \(String(format: "%.1f", drivenNits)) nit")
             lastRetakeLog = .now
             retakes = 0
         }
@@ -429,6 +433,7 @@ final class BuiltInDisplay: Identifiable {
         switch (enabled, boost) {
         case (true, .off): await enableBoost()
         case (false, .on):
+            Log.info("boost", "關閉增亮")
             settings.boostWasOn = false
             await disableBoost()
         default: break
@@ -442,6 +447,9 @@ final class BuiltInDisplay: Identifiable {
         // display sleep, the display has nothing to start from: boost would start near the minimum, and learn that as
         // the choice for this light. Restored at launch, that's until the user is back.
         updateMeasuredNits()
+        if !isLit || BacklightDriver.userIdleSeconds >= BacklightDriver.idleBeforeDimming {
+            Log.info("boost", "螢幕沒亮或沒有人在用，等使用者回來再開啟增亮")
+        }
         while !isLit || BacklightDriver.userIdleSeconds >= BacklightDriver.idleBeforeDimming {
             try? await Task.sleep(for: .seconds(1))
             updateMeasuredNits()
@@ -491,11 +499,11 @@ final class BuiltInDisplay: Identifiable {
         let pace: BacklightDriver.Pace = target > startNits ? .brighten : .dim
         steered = (target, pace)
         driver.steer(to: target, pace: pace)
-        log.info("boost on: preset \(current.name, privacy: .public) -> \(sdr600.name, privacy: .public), from \(startNits, format: .fixed(precision: 1)) nits to \(target, format: .fixed(precision: 1))")
+        Log.info("boost", "開啟增亮：\(current.name) → \(sdr600.name)，從 \(Int(startNits.rounded())) nit 到 \(Int(target.rounded())) nit")
     }
 
     private func failEnabling(_ message: String) {
-        log.error("boost failed: \(message, privacy: .public)")
+        Log.error("boost", "無法開啟增亮：\(message)")
         error = message
         boost = .off
     }
@@ -541,7 +549,7 @@ final class BuiltInDisplay: Identifiable {
     }
 
     private func restore(_ state: BoostRestoreState) async {
-        log.info("restoring preset #\(state.presetIndex), slider \(state.slider, format: .fixed(precision: 3)), auto \(state.autoBrightness)")
+        Log.info("boost", "還原：預設模式 #\(state.presetIndex)、亮度滑桿 \(String(format: "%.3f", state.slider))、自動亮度\(state.autoBrightness ? "開" : "關")")
         // Held where it is while macOS's own brightness is put back, then eased over to it, so nothing jumps. A boost
         // left behind by a crash is taken from where it is.
         let holding = driver.holdCurrent().map { holdWhite($0 / max(headroom, 1)) }

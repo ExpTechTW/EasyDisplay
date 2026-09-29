@@ -98,6 +98,7 @@ final class Updater {
                 change { $0.lastCheck = Date() }
                 available = UpdateCheck.update(in: releases, channel: channel, current: build.code)
                 phase = available == nil ? .upToDate : .idle
+                if let available { Log.info("update", "有新版本 \(available.label)（目前 \(build.label)）") }
                 #if DEBUG
                 if available != nil, ProcessInfo.processInfo.environment["EASYDISPLAY_UPDATE_AUTOINSTALL"] != nil {
                     return install()
@@ -107,6 +108,7 @@ final class Updater {
             } catch {
                 guard generation == self.generation else { return }
                 phase = .failed(UpdateFailure(error))
+                Log.warn("update", "檢查更新失敗：\(error)")
             }
         }
     }
@@ -141,6 +143,7 @@ final class Updater {
         }
         generation += 1
         phase = .downloading(percent: 0)
+        Log.info("update", "下載並安裝 \(release.label)")
         let appURL = appURL
         let identifier = Bundle.main.bundleIdentifier ?? ""
         let userAgent = userAgent
@@ -189,6 +192,7 @@ final class Updater {
 
     private func fail(_ failure: UpdateFailure, release: Release) {
         phase = .failed(failure)
+        Log.error("update", "無法安裝 \(release.label)：\(failure.message)")
         present(WarningPanel(
             style: .warning,
             title: L("update.failed_title"),

@@ -21,12 +21,18 @@ final class AppSettings {
 
     /// While boosted, follow the ambient light instead of holding the slider's level.
     var boostAutoBrightness: Bool {
-        didSet { defaults.set(boostAutoBrightness, forKey: Key.boostAutoBrightness) }
+        didSet {
+            defaults.set(boostAutoBrightness, forKey: Key.boostAutoBrightness)
+            Log.info("settings", "增亮時自動亮度：\(boostAutoBrightness ? "開" : "關")")
+        }
     }
 
     /// Turn boost back on at launch when it was on at quit. On unless turned off.
     var restoreBoostAtLaunch: Bool {
-        didSet { defaults.set(restoreBoostAtLaunch, forKey: Key.restoreBoostAtLaunch) }
+        didSet {
+            defaults.set(restoreBoostAtLaunch, forKey: Key.restoreBoostAtLaunch)
+            Log.info("settings", "啟動時恢復增亮：\(restoreBoostAtLaunch ? "開" : "關")")
+        }
     }
 
     /// Whether boost was on when EasyDisplay last quit. Only turning it off by hand clears it.
@@ -41,7 +47,10 @@ final class AppSettings {
 
     /// How many days the monitor keeps, every second of it and its summaries alike.
     var monitorRetentionDays: Int {
-        didSet { defaults.set(monitorRetentionDays, forKey: Key.monitorRetentionDays) }
+        didSet {
+            defaults.set(monitorRetentionDays, forKey: Key.monitorRetentionDays)
+            Log.info("settings", "紀錄保留：\(monitorRetentionDays) 天")
+        }
     }
 
     var monitorRetention: TimeInterval { TimeInterval(monitorRetentionDays) * 24 * 60 * 60 }
@@ -49,7 +58,10 @@ final class AppSettings {
     /// EasyDisplay takes the brightness keys and changes the display in use, with its own indicator. On unless turned
     /// off; needs Accessibility access.
     var handlesBrightnessKeys: Bool {
-        didSet { defaults.set(handlesBrightnessKeys, forKey: Key.handlesBrightnessKeys) }
+        didSet {
+            defaults.set(handlesBrightnessKeys, forKey: Key.handlesBrightnessKeys)
+            Log.info("settings", "由 EasyDisplay 處理亮度鍵：\(handlesBrightnessKeys ? "開" : "關")")
+        }
     }
 
     init(defaults: UserDefaults = .standard) {

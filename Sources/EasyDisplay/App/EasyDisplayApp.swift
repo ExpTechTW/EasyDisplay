@@ -42,12 +42,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var terminationSignal: DispatchSourceSignal?
     private var quitting = false
 
+    override init() {
+        // Before anything else, so the log has the launch from its first line.
+        Log.start(folder: MonitorDatabase.defaultURL.deletingLastPathComponent().appendingPathComponent("logs", isDirectory: true))
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        Log.info("app", "啟動 EasyDisplay \(BuildInfo.current.label)（macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) \(Self.sysctl("kern.osversion"))，\(Self.sysctl("hw.model"))）")
+        super.init()
+    }
+
+    /// A string from sysctl: `hw.model` is the Mac's model (Mac16,6), `kern.osversion` the macOS build (26A5416b).
+    private static func sysctl(_ name: String) -> String {
+        var size = 0
+        sysctlbyname(name, nil, &size, nil, 0)
+        var bytes = [CChar](repeating: 0, count: max(size, 1))
+        sysctlbyname(name, &bytes, &size, nil, 0)
+        return String(decoding: bytes.prefix { $0 != 0 }.map(UInt8.init), as: UTF8.self)
+    }
+
     /// Without the database the monitor still shows live readings, just no history.
     private static func openDatabase() -> MonitorDatabase? {
         do {
             return try MonitorDatabase()
         } catch {
-            log.error("monitor database unavailable: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "無法開啟監測資料庫，只顯示即時數值：\(error)")
             return nil
         }
     }

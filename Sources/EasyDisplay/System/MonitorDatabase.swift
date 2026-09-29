@@ -240,7 +240,7 @@ final class SampleWriter: @unchecked Sendable {
             do {
                 try store(sample)
             } catch {
-                log.error("monitor write failed: \(String(describing: error), privacy: .public)")
+                Log.error("monitor", "寫入監測資料失敗：\(error)")
             }
         }
     }

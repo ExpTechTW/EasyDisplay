@@ -49,8 +49,24 @@ struct GeneralPage: View {
                     ForEach(AppLanguage.allCases) { Text($0.displayName).tag($0) }
                 }
             }
+
+            Section {
+                LabeledContent {
+                    Button(L("settings.logs_open")) { openLogs() }
+                        .disabled(Log.folder == nil)
+                } label: {
+                    Text(L("settings.logs"))
+                    Text(LF("settings.logs_hint", Log.keptDays))
+                }
+            }
         }
         .onAppear(perform: refreshLoginState)
+    }
+
+    private func openLogs() {
+        guard let folder = Log.folder else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(folder)
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {

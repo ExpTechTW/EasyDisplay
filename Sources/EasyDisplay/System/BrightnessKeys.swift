@@ -61,7 +61,7 @@ final class BrightnessKeys {
         CGEvent.tapEnable(tap: tap, enable: true)
         self.tap = tap
         self.source = source
-        log.info("brightness keys: listening")
+        Log.info("keys", "開始接手亮度鍵")
         return true
     }
 

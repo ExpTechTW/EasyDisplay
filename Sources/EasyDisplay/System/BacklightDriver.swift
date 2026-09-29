@@ -340,7 +340,7 @@ final class BacklightDriver: @unchecked Sendable {
             notificationPort = port
         } else {
             IONotificationPortDestroy(port)
-            log.error("no brightness messages from the framebuffer (\(result)); checking 30 times a second instead")
+            Log.warn("backlight", "收不到 framebuffer 的亮度通知（\(result)），改成每秒檢查 30 次")
         }
     }
 

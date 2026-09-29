@@ -85,6 +85,8 @@ EasyDisplay は、メニューバーに常駐する macOS のディスプレイ�
 
 EasyDisplay は起動時とその後 6 時間ごとにアップデートを確認し、新しいバージョンがあればお知らせします。「設定 › ソフトウェアアップデート」の「今すぐ確認」ですぐに確認することもできます。メニューバーのアイコンが隠れているときは、Finder や Spotlight から EasyDisplay をもう一度開くと設定ウインドウが表示されます。
 
+問題が起きたときは、「設定 › 一般 › ログ」の「フォルダを開く」から、直近数日分のログを[問題の報告](https://github.com/ExpTechTW/EasyDisplay/issues)に添付してください。
+
 ### 正式版とテスト版
 
 | | 名前 | 公開のタイミング |
@@ -136,7 +138,7 @@ macOS の明るさが最大だと、corebrightnessd にとっての白はこの�
 - **明るさの自動調節**：corebrightnessd の `AggregatedLux` は、システムの明るさの自動調節がオフでも更新され続けます。`AmbientFilter`（Android の AutomaticBrightnessController にならい、速い平均と遅い平均、ヒステリシスの幅、待ち時間を持つ）が追従する明るさを決め、曲線がそれを明るさに換算します。曲線は `AmbientLight.curve` から始まり、調整のたびにその光の状態の点が 1 つ増えます（Android 9 以降と同じ）。点のあいだは対数目盛りで補間し、範囲の外はガウス関数で既定の曲線に戻し、最新の点から外側へ単調になるようにします。
 - **なぜ 1000 nit か**：全面が白い画面では、パネルは約 17.6 W、約 1100 nit で電力の上限に達します。1000 nit にとどめれば、明るさが画面の内容で変わりません。
 - **モニタのデータ**：`~/Library/Application Support/io.github.yuyu1015.EasyDisplay/Monitor.sqlite` に保存します。5 分ごとに 1 件のバイナリデータ（Float16、差分、バイトプレーン、LZMA 圧縮。平均で 1 秒あたり約 4〜6 バイト）と、長い期間のグラフと分析が読む 5 分ごとの要約があります。
-- **ログ**：`log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'`
+- **ログ**：`~/Library/Application Support/io.github.yuyu1015.EasyDisplay/logs/YYYY/MM/DD/HH.log` に 1 時間ごとに 1 ファイルで保存し、各行は `[時:分:秒.ミリ秒][レベル][分類]: 内容` の形で、直近 3 日分を残します。同じ内容はシステムのログにも送られ、`log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'` でリアルタイムに見られます。
 
 | ファイル | 内容 |
 |---|---|

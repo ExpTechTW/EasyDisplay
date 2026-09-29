@@ -85,6 +85,8 @@ EasyDisplay needs **macOS 26 or later** on Apple silicon. XDR Boost needs a MacB
 
 EasyDisplay checks for updates when it starts and every 6 hours after, and tells you when a new version is out; Check Now in Settings › Software Update checks right away. If the menu bar icon is hidden, open EasyDisplay again (from Finder or Spotlight) to show the Settings window.
 
+If something goes wrong, press Open Folder under Settings › General › Logs and attach the last few days' logs to your [problem report](https://github.com/ExpTechTW/EasyDisplay/issues).
+
 ### Releases and pre-releases
 
 | | Name | Published |
@@ -136,7 +138,7 @@ With macOS's brightness at its maximum, corebrightnessd's white is the preset's 
 - **Auto-brightness**: corebrightnessd's `AggregatedLux` keeps updating while the system's auto-brightness is off. `AmbientFilter` (after Android's AutomaticBrightnessController: a fast and a slow average, a hysteresis band and a debounce) decides which light level to follow, and a curve gives its brightness. The curve starts as `AmbientLight.curve`, and each adjustment is a point for its lighting (as on Android since 9). Between points it's interpolated on a log scale, beyond them it fades back to the default with a Gaussian, and it's kept monotonic outward from the newest point.
 - **Why 1000 nits**: on a full-white screen the panel reaches a power limit at about 17.6 W, roughly 1100 nits. At 1000 nits, brightness doesn't depend on what's on screen.
 - **Monitor data**: kept in `~/Library/Application Support/io.github.yuyu1015.EasyDisplay/Monitor.sqlite`. Each five minutes is one binary block (Float16, delta-encoded, split into byte planes, LZMA-compressed; about 4–6 bytes per second on average), plus a five-minute summary that the longer charts and the analysis read.
-- **Logs**: `log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'`
+- **Logs**: kept in `~/Library/Application Support/io.github.yuyu1015.EasyDisplay/logs/YYYY/MM/DD/HH.log`, a file per hour, each line `[HH:MM:SS.mmm][LEVEL][tag]: message`, for the last 3 days. The same lines go to the unified log, live with `log stream --predicate 'subsystem == "io.github.yuyu1015.EasyDisplay"'`.
 
 | File | What's in it |
 |---|---|

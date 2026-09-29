@@ -179,3 +179,7 @@
 "curve.points_hint" = "Each is the brightness you chose for one kind of lighting.";
 "curve.reset" = "Forget";
 "curve.footer" = "Turning the brightness up or down while it follows the light teaches it that brightness for the light around you then, and only near it: brighter in a dark room doesn't mean brighter in daylight. The light level only changes after the room really changes (10% brighter for 4 s, 20% darker for 8 s), and the brightness eases to it.";
+
+"settings.logs" = "Logs";
+"settings.logs_hint" = "Records changes to Boost, brightness, displays and temperature, for the last %d days. Attach them when you report a problem.";
+"settings.logs_open" = "Open Folder";

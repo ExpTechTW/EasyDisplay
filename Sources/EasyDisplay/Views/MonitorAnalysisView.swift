@@ -125,7 +125,7 @@ struct MonitorAnalysisSection: View {
                 end: now
             )
         } catch {
-            log.error("analysis failed: \(String(describing: error), privacy: .public)")
+            Log.error("monitor", "計算分析失敗：\(error)")
         }
     }
 
