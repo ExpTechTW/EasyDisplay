@@ -23,6 +23,7 @@ enum DisplayServices {
     private static let canChange = systemSymbol(path, "DisplayServicesCanChangeBrightness", as: Query.self)
     private static let getBrightness = systemSymbol(path, "DisplayServicesGetBrightness", as: GetFloat.self)
     private static let setBrightness = systemSymbol(path, "DisplayServicesSetBrightness", as: SetFloat.self)
+    private static let setLinear = systemSymbol(path, "DisplayServicesSetLinearBrightness", as: SetFloat.self)
     private static let getAuto = systemSymbol(path, "DisplayServicesAmbientLightCompensationEnabled", as: GetBool.self)
     private static let setAuto = systemSymbol(path, "DisplayServicesEnableAmbientLightCompensation", as: SetBool.self)
 
@@ -40,6 +41,13 @@ enum DisplayServices {
     @discardableResult
     static func setBrightness(_ display: CGDirectDisplayID, _ value: Double) -> Bool {
         setBrightness?(display, Float(min(max(value, 0), 1))) == 0
+    }
+
+    /// The backlight level corebrightnessd drives, as a fraction of 600 nits, the panel's SDR maximum (measured on a
+    /// 16" M4 Max: 0.2133 is 128.0 nits, 0.0903 is 54.2). Setting it makes corebrightnessd write that level at once, in
+    /// one write, and moves the slider to match.
+    static func setLinearBrightness(_ display: CGDirectDisplayID, _ value: Double) -> Bool {
+        setLinear?(display, Float(min(max(value, 0), 1))) == 0
     }
 
     static func autoBrightness(_ display: CGDirectDisplayID) -> Bool? {

@@ -581,36 +581,58 @@ final class BuiltInDisplay: Identifiable {
         boost = .off
     }
 
+    /// Gives the display back to macOS without a flicker. Holding the backlight while macOS changes its brightness
+    /// means undoing every step of its ramps, a hundred a second, and each one shows for a moment. So the other way
+    /// round: macOS is first made to want exactly the level on screen, which it can then take over without a change,
+    /// and every change after that (the preset, auto-brightness ramping to its level) is macOS's own, smooth, with
+    /// nothing in its way.
     private func restore(_ state: BoostRestoreState) async {
         Log.info("boost", "還原：預設模式 #\(state.presetIndex)、亮度滑桿 \(String(format: "%.3f", state.slider))、自動亮度\(state.autoBrightness ? "開" : "關")")
-        // Held where it is while macOS's own brightness is put back, then eased over to it, so nothing jumps. A boost
-        // left behind by a crash is taken from where it is.
-        let holding = driver.holdCurrent().map { holdWhite($0 / max(headroom, 1)) }
-        defer { holding?.cancel() }
-        // Until the hand-over is done, at most 2 + 0.5 + 6 + 1.5 seconds.
-        driver.watchClosely(for: 11)
-        DisplayPresets.activate(index: state.presetIndex, on: id)
-        try? await Task.sleep(for: .seconds(2))
-        // Switching presets resets the slider, so the slider is restored last.
-        _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, state.autoBrightness) }
-        _ = await withTimeout { [id] in DisplayServices.setBrightness(id, state.slider) }
-        try? await Task.sleep(for: .milliseconds(500))
-        let handedOver = await driver.handOver()
-        Log.info("boost", handedOver
-            ? "背光已平順交還給 macOS（\(String(format: "%.1f", framebuffer.nits(BuiltInFramebuffer.levelKey) ?? 0)) nit）"
-            : "macOS 沒有寫入背光，改用調動滑桿讓它重新設定")
-        if !handedOver {
-            // Nothing from corebrightnessd to ease to (the display is off, or it never wrote the backlight): its old
-            // cap back, and a nudge of the slider makes it write the level again.
+        let savedCap = state.caps[BuiltInFramebuffer.backlightCapKey].map { Double($0) / 65536 } ?? Self.macOSMaxNits
+        // A boost left behind by a crash is taken from where it is.
+        if let held = driver.holdCurrent() {
+            driver.watchClosely(for: 3)
+            // macOS goes no higher than 600 nits.
+            if held > Self.macOSMaxNits { await driver.ease(to: Self.macOSMaxNits) }
+            let level = min(held, Self.macOSMaxNits)
+            _ = await withTimeout { [id] in DisplayServices.setLinearBrightness(id, level / Self.macOSMaxNits) }
+            try? await Task.sleep(for: .milliseconds(150))
+            await driver.release(fallbackCap: savedCap)
+            Log.info("boost", "背光在 \(String(format: "%.1f", level)) nit 交給 macOS")
+        } else {
+            // Off: nothing to see. Its old cap back, or it would hold macOS's backlight down once the display wakes.
+            await driver.release(fallbackCap: savedCap)
             if let raw = state.caps[BuiltInFramebuffer.backlightCapKey] { framebuffer.setRaw(BuiltInFramebuffer.backlightCapKey, raw) }
-            _ = await withTimeout { [id] in DisplayServices.setBrightness(id, max(0, state.slider - 0.05)) }
-            try? await Task.sleep(for: .milliseconds(300))
+        }
+        DisplayPresets.activate(index: state.presetIndex, on: id)
+        try? await Task.sleep(for: .seconds(1))
+        if state.autoBrightness {
+            // macOS eases from here to its own level for the light, over a few seconds.
+            _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, true) }
+        } else if let from = await readSlider() {
+            await fadeSlider(from: from, to: state.slider)
+        } else {
             _ = await withTimeout { [id] in DisplayServices.setBrightness(id, state.slider) }
         }
         for key in [BuiltInFramebuffer.physicalLimitKey, BuiltInFramebuffer.indicatorCapKey] {
             if let raw = state.caps[key], raw != framebuffer.raw(key) { framebuffer.setRaw(key, raw) }
         }
         BoostRestoreState.clear()
+    }
+
+    /// The most macOS drives the backlight to for SDR, and what its linear brightness is a fraction of.
+    nonisolated private static let macOSMaxNits = 600.0
+
+    /// Moves macOS's slider to `to` in 0.75 s, in 45 small steps, each one a single write by macOS. At once, the
+    /// slider would jump the brightness in one go.
+    private func fadeSlider(from: Double, to: Double) async {
+        guard abs(to - from) > 0.001 else { return }
+        let steps = 45
+        for step in 1...steps {
+            let value = from + (to - from) * Double(step) / Double(steps)
+            _ = await withTimeout { [id] in DisplayServices.setBrightness(id, value) }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
     }
 }
 

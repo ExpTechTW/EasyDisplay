@@ -23,7 +23,7 @@ final class BacklightDriver: @unchecked Sendable {
     enum Pace: Sendable {
         /// The slider and keys, and the dimming before display sleep.
         case quick
-        /// Handing the backlight back to macOS: a short fade, as macOS changes brightness itself.
+        /// Down to what macOS can show, before handing it the backlight: a short fade, as macOS changes brightness itself.
         case handOver
         case brighten, dim
 
@@ -97,15 +97,6 @@ final class BacklightDriver: @unchecked Sendable {
     private static let overwriteReportInterval: UInt64 = 250_000_000
     /// No keyboard or pointer input for this long, a falling level from elsewhere is the dimming before display sleep.
     static let idleBeforeDimming: TimeInterval = 10
-    /// Handing over, corebrightnessd is done ramping once it hasn't written for this long (its ramps write every 8 to
-    /// 50 ms).
-    private static let settled: UInt64 = 400_000_000
-    /// Handing over waits at most this long for corebrightnessd to settle, and for it to write at all.
-    private static let settleLimit: UInt64 = 6_000_000_000
-    private static let firstWriteLimit: UInt64 = 1_500_000_000
-    /// And eases for at most this long once it has.
-    private static let easeLimit: UInt64 = 1_500_000_000
-
     private let framebuffer: BuiltInFramebuffer
     private let queue = DispatchQueue(label: "EasyDisplay.backlight", qos: .userInteractive)
     private let onLevel: @MainActor @Sendable (Double) -> Void
@@ -125,9 +116,9 @@ final class BacklightDriver: @unchecked Sendable {
     private var dimmedTo: Double?
     /// The last level and cap written elsewhere, which is where corebrightnessd wants the backlight.
     private var foreign: (level: Double, cap: Double, at: UInt64)?
-    /// Set while handing the backlight back: when it began, when corebrightnessd was found settled, and what to call
-    /// once it's done.
-    private var handingOver: (began: UInt64, settledAt: UInt64?, done: (Bool) -> Void)?
+    /// Called once the level has reached its goal, for `ease(to:)`.
+    private var arrived: (() -> Void)?
+    private var easing: (token: UUID, continuation: CheckedContinuation<Void, Never>)?
     private var reportedAt: UInt64 = 0
     private var overwriteReportedAt: UInt64 = 0
     private var interference: Interference?
@@ -168,7 +159,6 @@ final class BacklightDriver: @unchecked Sendable {
             dimmedTo = nil
             // Only what corebrightnessd writes from now on says where it wants the backlight.
             foreign = nil
-            handingOver = nil
             state = .holding
             framebuffer.raiseOuterCaps(to: BuiltInDisplay.maxBoostNits)
             framebuffer.drive(nits: level)
@@ -178,9 +168,9 @@ final class BacklightDriver: @unchecked Sendable {
         }
     }
 
-    /// Watches the backlight closely for `seconds`: while macOS switches presets or its slider, corebrightnessd writes
-    /// the backlight about a hundred times a second, and the framebuffer's messages about it can come many
-    /// milliseconds late. Read every 0.1 ms instead, a write elsewhere is undone before its paired cap or level write
+    /// Watches the backlight closely for `seconds`: while boost starts, turning the system's auto-brightness off and
+    /// switching the preset make corebrightnessd write the backlight about a hundred times a second, and the
+    /// framebuffer's messages about it can come many milliseconds late. Read every 0.1 ms instead, a write elsewhere is undone before its paired cap or level write
     /// lands, so it doesn't show, or shows for a fraction of a millisecond. It costs a fifth of a core while it lasts.
     func watchClosely(for seconds: Double) {
         queue.async { [self] in
@@ -189,32 +179,55 @@ final class BacklightDriver: @unchecked Sendable {
         }
     }
 
-    /// Handing over, it still moves where the level is held until corebrightnessd has settled.
     func steer(to nits: Double, pace: Pace) {
         queue.async { [self] in
-            guard handingOver?.settledAt == nil else { return }
             goal = nits
             self.pace = pace
             schedule()
         }
     }
 
-    /// Gives the backlight back to corebrightnessd without a jump. Held where it is until corebrightnessd has finished
-    /// its own ramp to where it wants the backlight (at most 6 seconds), eased there in one fade, then left with exactly
-    /// what corebrightnessd wrote. False when corebrightnessd wrote nothing (the display is off, or nothing changed for
-    /// it): the driver just stopped, and corebrightnessd has to be made to write the backlight again.
-    @discardableResult
-    func handOver() async -> Bool {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+    /// Fades to `nits` with the hand-over pace; returns once it's there, or after a second and a half at most.
+    func ease(to nits: Double) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             queue.async { [self] in
-                guard state == .holding else {
-                    finish()
-                    continuation.resume(returning: false)
+                guard state == .holding, current != nits else {
+                    continuation.resume()
                     return
                 }
-                dimmedTo = nil
-                handingOver = (DispatchTime.now().uptimeNanoseconds, nil, { continuation.resume(returning: $0) })
+                goal = nits
+                pace = .handOver
+                // Whichever comes first, arriving or the time limit, resumes; both run on the queue.
+                let token = UUID()
+                easing = (token, continuation)
+                arrived = { [self] in finishEasing(token) }
+                queue.asyncAfter(deadline: .now() + 1.5) { [self] in finishEasing(token) }
                 schedule()
+            }
+        }
+    }
+
+    /// Only called on the queue.
+    private func finishEasing(_ token: UUID) {
+        guard let easing, easing.token == token else { return }
+        self.easing = nil
+        arrived = nil
+        easing.continuation.resume()
+    }
+
+    /// Lets go of the backlight, leaving the level as it is: macOS has been made to want this level already, so there's
+    /// nothing left to hold. Puts back the cap macOS last wrote (ours would clamp its next ramps), or `fallbackCap`.
+    /// Returns the level macOS last wrote, if it wrote one.
+    @discardableResult
+    func release(fallbackCap: Double) async -> Double? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Double?, Never>) in
+            queue.async { [self] in
+                let written = foreign
+                if state != .stopped {
+                    framebuffer.setNits(BuiltInFramebuffer.backlightCapKey, max(written?.cap ?? fallbackCap, current))
+                }
+                finish()
+                continuation.resume(returning: written?.level)
             }
         }
     }
@@ -251,11 +264,9 @@ final class BacklightDriver: @unchecked Sendable {
         thread.start()
     }
 
-    /// Where the level is going: the goal, or corebrightnessd's level once it has settled while handing over, and never
-    /// above the system's dimming.
+    /// Where the level is going: the goal, never above the system's dimming.
     private var target: Double {
-        if handingOver?.settledAt != nil, let foreign { return foreign.level }
-        return min(goal, dimmedTo ?? .infinity)
+        min(goal, dimmedTo ?? .infinity)
     }
 
     /// Reads the backlight; anything written elsewhere is written back, and the system's own changes followed.
@@ -315,7 +326,7 @@ final class BacklightDriver: @unchecked Sendable {
         burst.last = now
         // What the panel showed: the lower of level and cap.
         let shown = min(level, cap)
-        if dimmedTo == nil, handingOver == nil, abs(shown - held) > max(1, held * 0.02) {
+        if dimmedTo == nil, abs(shown - held) > max(1, held * 0.02) {
             burst.visible += 1
             if abs(shown - held) > abs((burst.worst?.level ?? held) - (burst.worst?.held ?? held)) { burst.worst = (shown, held) }
             burst.longestMilliseconds = max(burst.longestMilliseconds, Double(now - landed) / 1e6)
@@ -331,7 +342,6 @@ final class BacklightDriver: @unchecked Sendable {
     }
 
     private var activity: String {
-        if handingOver != nil { return "交還背光" }
         if dimmedTo != nil { return "跟著系統調暗" }
         if current != goal { return "漸變中" }
         return "維持亮度"
@@ -340,7 +350,6 @@ final class BacklightDriver: @unchecked Sendable {
     /// The dimming before display sleep is corebrightnessd ramping the level down, many steps a second, with nobody at
     /// the Mac. Followed, it dims as macOS would; the user coming back undims it.
     private func followDimming(_ level: Double, previous: (level: Double, cap: Double, at: UInt64)?, now: UInt64) {
-        guard handingOver == nil else { return }
         let idle = Self.userIdleSeconds >= Self.idleBeforeDimming
         if let dimmed = dimmedTo {
             if idle, level <= dimmed + 0.5 {
@@ -369,13 +378,16 @@ final class BacklightDriver: @unchecked Sendable {
             return
         }
         if dimmedTo != nil, Self.userIdleSeconds < Self.idleBeforeDimming { undim() }
-        if advanceHandOver() { return }
         let target = target
         if current != target {
-            let fraction = handingOver != nil ? Pace.handOver.fraction : dimmedTo != nil ? Pace.quick.fraction : pace.fraction
+            let fraction = dimmedTo != nil ? Pace.quick.fraction : pace.fraction
             current = Self.step(from: current, toward: target, fraction: fraction)
             framebuffer.drive(nits: current)
             if current == target || DispatchTime.now().uptimeNanoseconds - reportedAt >= Self.reportInterval { report() }
+        }
+        if current == goal, let arrived {
+            self.arrived = nil
+            arrived()
         }
         schedule()
     }
@@ -385,31 +397,6 @@ final class BacklightDriver: @unchecked Sendable {
         reportedAt = DispatchTime.now().uptimeNanoseconds
         let level = current
         DispatchQueue.main.async { [onLevel] in MainActor.assumeIsolated { onLevel(level) } }
-    }
-
-    /// Moves a hand-over along; true once it's over.
-    private func advanceHandOver() -> Bool {
-        guard var handing = handingOver else { return false }
-        let now = DispatchTime.now().uptimeNanoseconds
-        guard let foreign else {
-            guard now - handing.began >= Self.firstWriteLimit else { return false }
-            finish()
-            handing.done(false)
-            return true
-        }
-        if handing.settledAt == nil, now - foreign.at >= Self.settled || now - handing.began >= Self.settleLimit {
-            handing.settledAt = now
-            handingOver = handing
-        }
-        guard let settledAt = handing.settledAt, current == foreign.level || now - settledAt >= Self.easeLimit else {
-            return false
-        }
-        // Exactly what corebrightnessd asked for, so its own next step carries on from there.
-        framebuffer.setNits(BuiltInFramebuffer.backlightCapKey, foreign.cap)
-        framebuffer.setNits(BuiltInFramebuffer.levelKey, foreign.level)
-        finish()
-        handing.done(true)
-        return true
     }
 
     /// Writes the level back, the backlight cap first: with our cap back, a higher level written elsewhere no longer
@@ -423,7 +410,7 @@ final class BacklightDriver: @unchecked Sendable {
     /// second.
     private func schedule() {
         guard state != .stopped else { return }
-        let moving = notificationPort == nil || state == .holding && (current != target || handingOver != nil)
+        let moving = notificationPort == nil || state == .holding && current != target
         if timer != nil, moving == timerIsFast { return }
         timerIsFast = moving
         if timer == nil {
@@ -456,7 +443,8 @@ final class BacklightDriver: @unchecked Sendable {
     private func finish() {
         closeInterference()
         state = .stopped
-        handingOver = nil
+        if let easing { finishEasing(easing.token) }
+        arrived = nil
         dimmedTo = nil
         foreign = nil
         timer?.cancel()
