@@ -303,12 +303,14 @@ final class BuiltInDisplay: Identifiable {
             lux = followed
             Log.info("auto", "環境光改為 \(String(format: "%.1f", followed)) lux")
         }
-        // Nothing learned for this lighting yet: the brightness on screen when boost started is the first choice,
-        // so turning boost on never dims the display towards a default the user never picked.
-        if first, let lux, settings.boostAutoBrightness, !settings.autoCurve.hasPoint(near: lux) {
+        // Nothing learned yet: the brightness on screen when boost started is the first choice, so turning boost on
+        // never dims the display towards a default the user never picked. Once the user has chosen anywhere, the curve
+        // is theirs: the brightness macOS happened to be at must not become the newest point, which the curve would
+        // bend every other choice to.
+        if first, let lux, settings.boostAutoBrightness, settings.autoCurve.points.isEmpty {
             let nits = max(drivenNits, Self.minBoostNits)
             settings.autoCurve.learn(lux: lux, nits: nits)
-            Log.info("auto", "這種光線還沒有學過亮度，把開啟增亮時的 \(Int(nits.rounded())) nit 當成 \(String(format: "%.1f", lux)) lux 的起點")
+            Log.info("auto", "還沒有學過亮度，把開啟增亮時的 \(Int(nits.rounded())) nit 當成 \(String(format: "%.1f", lux)) lux 的起點")
         }
     }
 
