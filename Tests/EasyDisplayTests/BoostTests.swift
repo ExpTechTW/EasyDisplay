@@ -21,9 +21,11 @@ import Testing
         #expect(BuiltInDisplay.thermalCeiling(forCelsius: 42) == BuiltInDisplay.maxBoostNits)
         #expect(BuiltInDisplay.thermalCeiling(forCelsius: 43.5) == 800)
         #expect(BuiltInDisplay.thermalCeiling(forCelsius: 45) == 600)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 48) == 400)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 70) == 400)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 48) == 600)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 70) == 600)
         let ceilings = stride(from: 30.0, through: 60, by: 0.5).map(BuiltInDisplay.thermalCeiling(forCelsius:))
+        // Only what boost adds above the panel's own maximum is ever held back.
+        #expect(ceilings.allSatisfy { $0 >= 600 })
         #expect(zip(ceilings, ceilings.dropFirst()).allSatisfy { $0 >= $1 })
     }
 

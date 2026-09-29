@@ -123,7 +123,7 @@
 "settings.thermal_now" = "ディスプレイ温度";
 "settings.thermal_now_value" = "%1$@ °C · 上限 %2$d nit";
 "settings.thermal_value" = "%1$d °C から下げ、%2$d °C で %3$d nit";
-"settings.thermal_hint" = "%1$d °C 以上では %2$d nit に制限します。バックライトを直接制御すると macOS 自身の温度管理を通らないため、パネルが熱くなる前に EasyDisplay が自分で明るさを下げます。";
+"settings.thermal_hint" = "最低でも %d nit を保ちます。これはパネル本来の最大の明るさで、高負荷のときも macOS が表示する明るさです。バックライトを直接制御すると macOS 自身の温度管理を通らないため、パネルが熱くなる前に、ブーストで上乗せした分を EasyDisplay が自分で制限します。";
 
 "monitor.ambient" = "周囲の明るさ";
 "monitor.system_power" = "システム電力";

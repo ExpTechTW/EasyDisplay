@@ -51,8 +51,13 @@ final class BuiltInDisplay: Identifiable {
     nonisolated static let minBoostNits = 2.0
     /// Direct backlight writes bypass corebrightnessd's thermal management, so EasyDisplay applies its own, well
     /// before the panel gets hot: the boost ceiling falls linearly between these points of the hottest display sensor
-    /// (smoothed), from the full 1000 nits to 600 (the panel's own SDR maximum), then to 400.
-    static let thermalCurve: [(celsius: Double, nits: Double)] = [(42, maxBoostNits), (45, 600), (48, 400)]
+    /// (smoothed), from the full 1000 nits to 600, and stays there.
+    ///
+    /// 600 nits is the panel's own SDR maximum, which macOS shows under any load: a limit below it would only dim the
+    /// display further than macOS itself does. It would, too, since the hottest sensors sit along the hinge, where the
+    /// processor's exhaust warms the panel (measured: 2.6 °C in 90 s of 45 W, with the backlight unchanged), so they
+    /// read 46 to 51 °C under heavy load at any brightness.
+    static let thermalCurve: [(celsius: Double, nits: Double)] = [(42, maxBoostNits), (45, 600)]
     /// Where the system slider stays while boosted.
     nonisolated static let pinnedSlider = 1.0
     /// One press of a brightness key, as macOS steps its own slider.

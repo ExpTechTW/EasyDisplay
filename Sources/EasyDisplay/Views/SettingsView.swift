@@ -166,7 +166,7 @@ struct BoostPage: View {
                     Text(LF("settings.thermal_value", Int(curve[0].celsius), Int(curve[1].celsius), Int(curve[1].nits)))
                 } label: {
                     Text(L("settings.thermal"))
-                    Text(LF("settings.thermal_hint", Int(curve[2].celsius), Int(curve[2].nits)))
+                    Text(LF("settings.thermal_hint", Int(curve[1].nits)))
                 }
             } footer: {
                 Text(L("settings.boost_footer"))
