@@ -62,6 +62,26 @@ final class BacklightDriver: @unchecked Sendable {
         case off, on
         /// The system started dimming the display before it sleeps, or stopped because the user is back.
         case dimming, undimmed
+        /// Writes elsewhere over the last stretch, and how visible they were.
+        case interference(Interference)
+    }
+
+    /// Writes from elsewhere, gathered over a stretch of time so a ramp of a hundred writes a second is one line in the
+    /// log. Something else's level only shows for as long as it takes to write ours back, and not at all when our cap
+    /// (BLNitsCap) stayed below it: the panel shows the lower of the two.
+    struct Interference: Sendable {
+        var writes = 0
+        /// Writes the panel could show: the lower of level and cap more than 2% away from ours. A higher level under our
+        /// own cap doesn't show; corebrightnessd writes the level alone after wake and while the slider is pinned.
+        var visible = 0
+        /// The level furthest from ours that showed, and ours at the time.
+        var worst: (level: Double, held: Double)?
+        /// The longest a foreign level stayed on screen before it was written back, in milliseconds.
+        var longestMilliseconds = 0.0
+        var first: UInt64 = 0
+        var last: UInt64 = 0
+        /// What the driver was doing: holding, easing to a goal, following the dimming, handing over.
+        var during: String = ""
     }
 
     private enum State {
@@ -110,6 +130,9 @@ final class BacklightDriver: @unchecked Sendable {
     private var handingOver: (began: UInt64, settledAt: UInt64?, done: (Bool) -> Void)?
     private var reportedAt: UInt64 = 0
     private var overwriteReportedAt: UInt64 = 0
+    private var interference: Interference?
+    /// A burst of writes elsewhere ends once none has come for this long.
+    private static let interferenceGap: UInt64 = 1_000_000_000
 
     init(
         framebuffer: BuiltInFramebuffer,
@@ -200,6 +223,7 @@ final class BacklightDriver: @unchecked Sendable {
         // Off is the system's call; EasyDisplay's own lowest is 2 nits.
         if level < 0.5 {
             if state != .off {
+                closeInterference()
                 state = .off
                 dimmedTo = nil
                 send(.off)
@@ -218,16 +242,51 @@ final class BacklightDriver: @unchecked Sendable {
         }
         let cap = framebuffer.nits(BuiltInFramebuffer.backlightCapKey) ?? level
         guard abs(level - current) > 0.5 || abs(cap - current) > 0.5 else { return }
+        // The message arrives after the write; the cap read with the level says whether it showed.
         let now = DispatchTime.now().uptimeNanoseconds
         let previous = foreign
         foreign = (level, cap, now)
         followDimming(level, previous: previous, now: now)
+        let held = current
         retake()
+        record(level: level, cap: cap, held: held, landed: now)
         if dimmedTo == nil, now - overwriteReportedAt >= Self.overwriteReportInterval {
             overwriteReportedAt = now
             send(.overwritten(level))
         }
         schedule()
+    }
+
+    /// Adds a write from elsewhere to the current burst. `landed` is when the write was seen; the time until ours was
+    /// back is how long it could have shown.
+    private func record(level: Double, cap: Double, held: Double, landed: UInt64) {
+        let now = DispatchTime.now().uptimeNanoseconds
+        if let burst = interference, now - burst.last > Self.interferenceGap { closeInterference() }
+        var burst = interference ?? Interference(first: now, during: activity)
+        burst.writes += 1
+        burst.last = now
+        // What the panel showed: the lower of level and cap.
+        let shown = min(level, cap)
+        if dimmedTo == nil, handingOver == nil, abs(shown - held) > max(1, held * 0.02) {
+            burst.visible += 1
+            if abs(shown - held) > abs((burst.worst?.level ?? held) - (burst.worst?.held ?? held)) { burst.worst = (shown, held) }
+            burst.longestMilliseconds = max(burst.longestMilliseconds, Double(now - landed) / 1e6)
+        }
+        interference = burst
+    }
+
+    /// Sends the burst of writes elsewhere to the main thread, which logs it.
+    private func closeInterference() {
+        guard let burst = interference else { return }
+        interference = nil
+        send(.interference(burst))
+    }
+
+    private var activity: String {
+        if handingOver != nil { return "交還背光" }
+        if dimmedTo != nil { return "跟著系統調暗" }
+        if current != goal { return "漸變中" }
+        return "維持亮度"
     }
 
     /// The dimming before display sleep is corebrightnessd ramping the level down, many steps a second, with nobody at
@@ -256,6 +315,7 @@ final class BacklightDriver: @unchecked Sendable {
 
     private func tick() {
         check()
+        if let burst = interference, DispatchTime.now().uptimeNanoseconds - burst.last > Self.interferenceGap { closeInterference() }
         guard state == .holding else {
             schedule()
             return
@@ -345,6 +405,7 @@ final class BacklightDriver: @unchecked Sendable {
     }
 
     private func finish() {
+        closeInterference()
         state = .stopped
         handingOver = nil
         dimmedTo = nil

@@ -116,9 +116,9 @@ final class BuiltInDisplay: Identifiable {
     /// A hung corebrightnessd would otherwise pile up one blocked thread per poll.
     @ObservationIgnored private var sliderRead: Task<Void, Never>?
     @ObservationIgnored private var measuring: Task<Void, Never>?
-    @ObservationIgnored private var retakes = 0
-    @ObservationIgnored private var lastRetakeLog = Date.distantPast
     @ObservationIgnored private var wasLimited = false
+    @ObservationIgnored private var targetLog: Task<Void, Never>?
+    @ObservationIgnored private var loggedTarget: Int?
     @ObservationIgnored private var lastAutoMode: Bool?
     /// Set by layout snapshots; never touches the display.
     @ObservationIgnored private var isPreview = false
@@ -306,7 +306,9 @@ final class BuiltInDisplay: Identifiable {
         // Nothing learned for this lighting yet: the brightness on screen when boost started is the first choice,
         // so turning boost on never dims the display towards a default the user never picked.
         if first, let lux, settings.boostAutoBrightness, !settings.autoCurve.hasPoint(near: lux) {
-            settings.autoCurve.learn(lux: lux, nits: max(drivenNits, Self.minBoostNits))
+            let nits = max(drivenNits, Self.minBoostNits)
+            settings.autoCurve.learn(lux: lux, nits: nits)
+            Log.info("auto", "這種光線還沒有學過亮度，把開啟增亮時的 \(Int(nits.rounded())) nit 當成 \(String(format: "%.1f", lux)) lux 的起點")
         }
     }
 
@@ -374,6 +376,22 @@ final class BuiltInDisplay: Identifiable {
         if let steered, steered.nits == target, steered.pace == pace { return }
         steered = (target, pace)
         driver.steer(to: target, pace: pace)
+        logTarget(target, manual: manual)
+    }
+
+    /// Where the brightness is headed and why, once a change has settled: a dragged slider or held key is one line,
+    /// not one per step.
+    private func logTarget(_ target: Double, manual: Bool) {
+        let reason = thermalLimited ? "溫度限制"
+            : manual ? (followsAmbient ? "手動調整（會學習）" : "手動調整")
+            : "自動亮度（\(String(format: "%.1f", lux ?? 0)) lux）"
+        targetLog?.cancel()
+        targetLog = Task { [drivenNits] in
+            try? await Task.sleep(for: .milliseconds(manual ? 600 : 0))
+            guard !Task.isCancelled, Int(target.rounded()) != loggedTarget else { return }
+            loggedTarget = Int(target.rounded())
+            Log.info("brightness", "目標亮度 \(Int(drivenNits.rounded())) → \(Int(target.rounded())) nit：\(reason)")
+        }
     }
 
     /// Keeps the brightness on screen when boosted auto-brightness is switched on or off.
@@ -395,20 +413,27 @@ final class BuiltInDisplay: Identifiable {
             Log.info("backlight", "背光重新點亮，回到原本的亮度")
         case .dimming: Log.info("backlight", "系統在螢幕休眠前調暗，跟著變暗")
         case .undimmed: Log.info("backlight", "使用者回來了，從調暗的亮度調回")
-        case .overwritten(let level): overwritten(level)
+        case .overwritten: overwritten()
+        case .interference(let burst): logInterference(burst)
         }
     }
 
-    /// Something else wrote the backlight (the driver has written it back): wake, a preset change, a True Tone
-    /// adjustment, or macOS moving its slider (Control Center, or a brightness key EasyDisplay couldn't take). If the
-    /// slider moved, that one step is applied and the slider pinned again.
-    private func overwritten(_ level: Double) {
-        retakes += 1
-        if Date.now.timeIntervalSince(lastRetakeLog) > 5 {
-            Log.info("backlight", "背光被其他程式改成 \(String(format: "%.1f", level)) nit（距上次紀錄共 \(retakes) 次），維持在 \(String(format: "%.1f", drivenNits)) nit")
-            lastRetakeLog = .now
-            retakes = 0
+    /// One line per burst of writes elsewhere: a warning when any of it could be seen, which is what a flicker is.
+    private func logInterference(_ burst: BacklightDriver.Interference) {
+        let seconds = String(format: "%.1f", Double(burst.last - burst.first) / 1e9)
+        guard let worst = burst.worst, burst.visible > 0 else {
+            Log.info("backlight", "其他程式在 \(seconds) 秒內改寫背光 \(burst.writes) 次（\(burst.during)），都在畫面顯示前寫回")
+            return
         }
+        Log.warn("backlight", "可能閃爍：其他程式在 \(seconds) 秒內改寫背光 \(burst.writes) 次（\(burst.during)），"
+            + "其中 \(burst.visible) 次會顯示；最大 \(Int(worst.level.rounded())) nit（當時維持 \(Int(worst.held.rounded())) nit），"
+            + "最長顯示 \(String(format: "%.1f", burst.longestMilliseconds)) ms")
+    }
+
+    /// Something else wrote the backlight (the driver has written it back, and logs it): wake, a preset change, a True
+    /// Tone adjustment, or macOS moving its slider (Control Center, or a brightness key EasyDisplay couldn't take). If
+    /// the slider moved, that one step is applied and the slider pinned again.
+    private func overwritten() {
         guard boost == .on, sliderRead == nil, !sliderWriter.isBusy else { return }
         sliderRead = Task {
             defer { sliderRead = nil }
@@ -420,6 +445,7 @@ final class BuiltInDisplay: Identifiable {
             // Until the pin lands, corebrightnessd's ramp keeps reporting the old, lower slider: counting it again
             // is how one key press once ran the brightness down to the minimum.
             if let pinned = pinPending, Date.now.timeIntervalSince(pinned) < 2 { return }
+            Log.info("keys", "macOS 的亮度滑桿被移到 \(String(format: "%.3f", value))（控制中心，或沒接手到的亮度鍵），換算成一格調整後固定回最大")
             lastManualChange = .now
             adjust(toPosition: Self.slider(forBoostNits: desiredNits) + value - Self.pinnedSlider)
             pinPending = .now
@@ -560,7 +586,11 @@ final class BuiltInDisplay: Identifiable {
         _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, state.autoBrightness) }
         _ = await withTimeout { [id] in DisplayServices.setBrightness(id, state.slider) }
         try? await Task.sleep(for: .milliseconds(500))
-        if await !driver.handOver() {
+        let handedOver = await driver.handOver()
+        Log.info("boost", handedOver
+            ? "背光已平順交還給 macOS（\(String(format: "%.1f", framebuffer.nits(BuiltInFramebuffer.levelKey) ?? 0)) nit）"
+            : "macOS 沒有寫入背光，改用調動滑桿讓它重新設定")
+        if !handedOver {
             // Nothing from corebrightnessd to ease to (the display is off, or it never wrote the backlight): its old
             // cap back, and a nudge of the slider makes it write the level again.
             if let raw = state.caps[BuiltInFramebuffer.backlightCapKey] { framebuffer.setRaw(BuiltInFramebuffer.backlightCapKey, raw) }
