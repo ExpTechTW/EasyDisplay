@@ -53,11 +53,15 @@ final class BuiltInDisplay: Identifiable {
     /// before the panel gets hot: the boost ceiling falls linearly between these points of the hottest display sensor
     /// (smoothed), from the full 1000 nits to 600, and stays there.
     ///
+    /// The temperature is the panel's own, away from the hinge (see `SMCSensors`): the sensors there read 46 to 51 °C
+    /// under heavy processor load at any brightness, from the exhaust, and held boost back for no reason of its own.
+    /// The panel's rows above read about 30 °C in use, so this only acts when the panel itself gets hot, in the sun or
+    /// a hot room. 1000 nits is what Apple rates this panel for, sustained and full-screen, and its hardware limits its
+    /// own power (at about 17.6 W) whatever is written.
+    ///
     /// 600 nits is the panel's own SDR maximum, which macOS shows under any load: a limit below it would only dim the
-    /// display further than macOS itself does. It would, too, since the hottest sensors sit along the hinge, where the
-    /// processor's exhaust warms the panel (measured: 2.6 °C in 90 s of 45 W, with the backlight unchanged), so they
-    /// read 46 to 51 °C under heavy load at any brightness.
-    static let thermalCurve: [(celsius: Double, nits: Double)] = [(42, maxBoostNits), (45, 600)]
+    /// display further than macOS itself does.
+    static let thermalCurve: [(celsius: Double, nits: Double)] = [(45, maxBoostNits), (50, 600)]
     /// Where the system slider stays while boosted.
     nonisolated static let pinnedSlider = 1.0
     /// One press of a brightness key, as macOS steps its own slider.

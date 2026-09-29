@@ -56,7 +56,8 @@ final class SensorMonitor {
             sensors = await Task.detached(priority: .utility) { SMCSensors() }.value
             if let sensors {
                 status = .running
-                Log.info("sensor", "感測器：背光功耗 PDBR \(sensors.backlight != nil ? "有" : "無")、整機功耗 PSTR \(sensors.system != nil ? "有" : "無")、螢幕溫度 TD* \(sensors.temperatures.count) 個")
+                Log.info("sensor", "感測器：背光功耗 PDBR \(sensors.backlight != nil ? "有" : "無")、整機功耗 PSTR \(sensors.system != nil ? "有" : "無")、"
+                    + "面板溫度 \(sensors.temperatures.map(\.name).joined(separator: " "))")
                 if let database {
                     let now = Date.now
                     recent = (try? await database.reader.samples(from: now.addingTimeInterval(-Self.recentWindow), to: now)) ?? []
@@ -164,13 +165,17 @@ private struct SMCSensors: Sendable {
     struct Readings: Sendable {
         var backlightWatts: Double?
         var systemWatts: Double?
-        /// The hottest display sensor, which the thermal limit follows.
+        /// The panel's temperature: the hottest of its sensors away from the hinge. The thermal limit follows it.
         var displayCelsius: Double?
     }
 
     let smc: SMC
     let backlight: SMC.Key?
     let system: SMC.Key?
+    /// The panel's temperature grid, TD00 to TD24, rows 0 to 2 from the top, without the bottom row: the processor's
+    /// exhaust comes out at the hinge and warms that row and the other display sensors (TDEL, TDER, TDVx…) by 2 to
+    /// 2.4 °C at 45 W, while the rows above rise 0.1 to 0.4 °C (measured on a 16" M4 Max). A Mac without the grid
+    /// uses every TD sensor.
     let temperatures: [SMC.Key]
 
     init?() {
@@ -178,7 +183,9 @@ private struct SMCSensors: Sendable {
         self.smc = smc
         backlight = smc.floatKey(named: "PDBR")
         system = smc.floatKey(named: "PSTR")
-        temperatures = smc.floatKeys(prefix: "TD")
+        let all = smc.floatKeys(prefix: "TD")
+        let panel = all.filter { $0.name.range(of: "^TD[01][0-9]$", options: .regularExpression) != nil }
+        temperatures = panel.isEmpty ? all : panel
         guard backlight != nil || !temperatures.isEmpty else { return nil }
     }
 

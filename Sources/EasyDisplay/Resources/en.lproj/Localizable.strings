@@ -123,7 +123,7 @@
 "settings.thermal_now" = "Display temperature";
 "settings.thermal_now_value" = "%1$@ °C · up to %2$d nits";
 "settings.thermal_value" = "Lowers from %1$d °C, %3$d nits at %2$d °C";
-"settings.thermal_hint" = "Never below %d nits, the panel's own maximum, which macOS shows under heavy load too. Driving the backlight directly bypasses macOS's own thermal management, so EasyDisplay limits what boost adds itself, well before the panel gets hot.";
+"settings.thermal_hint" = "Follows the panel's own temperature, not the area by the hinge that the processor's exhaust warms, so heavy load doesn't lower the brightness; never below %d nits, the panel's own maximum. Driving the backlight directly bypasses macOS's own thermal management, so EasyDisplay limits what boost adds itself when the panel gets hot.";
 
 "monitor.ambient" = "Ambient light";
 "monitor.system_power" = "System power";

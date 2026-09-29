@@ -18,10 +18,10 @@ import Testing
 
     @Test func theThermalCeilingFallsWellBeforeThePanelIsHot() {
         #expect(BuiltInDisplay.thermalCeiling(forCelsius: 38) == BuiltInDisplay.maxBoostNits)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 42) == BuiltInDisplay.maxBoostNits)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 43.5) == 800)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 45) == 600)
-        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 48) == 600)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 45) == BuiltInDisplay.maxBoostNits)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 47.5) == 800)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 50) == 600)
+        #expect(BuiltInDisplay.thermalCeiling(forCelsius: 55) == 600)
         #expect(BuiltInDisplay.thermalCeiling(forCelsius: 70) == 600)
         let ceilings = stride(from: 30.0, through: 60, by: 0.5).map(BuiltInDisplay.thermalCeiling(forCelsius:))
         // Only what boost adds above the panel's own maximum is ever held back.
