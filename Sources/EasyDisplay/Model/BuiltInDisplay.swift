@@ -115,6 +115,12 @@ final class BuiltInDisplay: Identifiable {
     @ObservationIgnored private var steered: (nits: Double, pace: BacklightDriver.Pace)?
     /// The last slider or key change, which eases in quickly even while following the ambient light.
     @ObservationIgnored private var lastManualChange = Date.distantPast
+    /// When the display last came back on, or the Mac woke. For a while after, macOS's own state is settling: its
+    /// slider reads 0.5 after a system sleep, which is its reset, not the user.
+    @ObservationIgnored private var wokeAt = Date.distantPast
+    /// macOS resets its slider and more for this long after a wake.
+    static let wakeSettling: TimeInterval = 10
+    @ObservationIgnored private var wakeCheck: Task<Void, Never>?
     /// Waiting for macOS's slider to read back pinned; until then a lower reading is the old one, not a new key.
     @ObservationIgnored private var pinPending: Date?
     /// A hung corebrightnessd would otherwise pile up one blocked thread per poll.
@@ -417,6 +423,7 @@ final class BuiltInDisplay: Identifiable {
         case .on:
             setLit(true)
             Log.info("backlight", "背光重新點亮，回到原本的亮度")
+            settleAfterWake()
         case .dimming: Log.info("backlight", "系統在螢幕休眠前調暗，跟著變暗")
         case .undimmed: Log.info("backlight", "使用者回來了，從調暗的亮度調回")
         case .overwritten: overwritten()
@@ -438,7 +445,8 @@ final class BuiltInDisplay: Identifiable {
 
     /// Something else wrote the backlight (the driver has written it back, and logs it): wake, a preset change, a True
     /// Tone adjustment, or macOS moving its slider (Control Center, or a brightness key EasyDisplay couldn't take). If
-    /// the slider moved, that one step is applied and the slider pinned again.
+    /// the slider moved, that is one step of brightness, up or down, and the slider is pinned again. Right after a
+    /// wake, a slider off its maximum is macOS's own reset, not the user: it's pinned again and nothing else changes.
     private func overwritten() {
         guard boost == .on, sliderRead == nil, !sliderWriter.isBusy else { return }
         sliderRead = Task {
@@ -451,11 +459,64 @@ final class BuiltInDisplay: Identifiable {
             // Until the pin lands, corebrightnessd's ramp keeps reporting the old, lower slider: counting it again
             // is how one key press once ran the brightness down to the minimum.
             if let pinned = pinPending, Date.now.timeIntervalSince(pinned) < 2 { return }
-            Log.info("keys", "macOS 的亮度滑桿被移到 \(String(format: "%.3f", value))（控制中心，或沒接手到的亮度鍵），換算成一格調整後固定回最大")
+            if Date.now.timeIntervalSince(wokeAt) < Self.wakeSettling {
+                Log.info("wake", "喚醒後 macOS 把亮度滑桿重設為 \(String(format: "%.3f", value))，固定回最大，亮度不變")
+                pin()
+                return
+            }
+            let step = value < Self.pinnedSlider ? -Self.keyStep : Self.keyStep
+            Log.info("keys", "macOS 的亮度滑桿被移到 \(String(format: "%.3f", value))（控制中心，或沒接手到的亮度鍵），當成\(step < 0 ? "調暗" : "調亮")一格後固定回最大")
             lastManualChange = .now
-            adjust(toPosition: Self.slider(forBoostNits: desiredNits) + value - Self.pinnedSlider)
-            pinPending = .now
-            sliderWriter.submit(Self.pinnedSlider)
+            adjust(toPosition: Self.slider(forBoostNits: desiredNits) + step)
+            pin()
+        }
+    }
+
+    private func pin() {
+        pinPending = .now
+        sliderWriter.submit(Self.pinnedSlider)
+    }
+
+    /// After the Mac or the display wakes, while boosted: puts back what macOS may have reset (its slider, which it
+    /// resets to 0.5 after a system sleep, auto-brightness, the preset), at once rather than when macOS next writes the
+    /// backlight. Until the slider is pinned again, macOS's EDR headroom is above 1 and it dims every SDR pixel by as
+    /// much, so meanwhile the backlight follows the headroom to keep white where it was.
+    func settleAfterWake() {
+        guard boost == .on, !isPreview else { return }
+        wokeAt = .now
+        driver.watchClosely(for: 6)
+        wakeCheck?.cancel()
+        wakeCheck = Task {
+            let white = targetNits
+            let holding = holdWhite(white)
+            defer {
+                holding.cancel()
+                // Back to wherever boost is headed now, from the level the white was held at.
+                steered = nil
+                steer()
+            }
+            let start = Date.now
+            var reset = false
+            while !Task.isCancelled, boost == .on, Date.now.timeIntervalSince(start) < Self.wakeSettling {
+                if let value = await readSlider() {
+                    if value < Self.pinnedSlider - 0.001 {
+                        if !reset { Log.info("wake", "喚醒後 macOS 把亮度滑桿重設為 \(String(format: "%.3f", value))，固定回最大，亮度不變") }
+                        reset = true
+                        // Once a second at most: each pin restarts macOS's ramp to it.
+                        if pinPending.map({ Date.now.timeIntervalSince($0) >= 1 }) ?? true { pin() }
+                    } else if headroom <= 1.005 {
+                        if reset {
+                            Log.info("wake", "喚醒後已恢復（\(String(format: "%.1f", Date.now.timeIntervalSince(start))) 秒）：滑桿在最大、EDR headroom 1")
+                        }
+                        return
+                    }
+                }
+                if await readAutoBrightness() == true {
+                    Log.warn("wake", "喚醒後 macOS 打開了自動亮度，關掉")
+                    _ = await withTimeout { [id] in DisplayServices.setAutoBrightness(id, false) }
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
         }
     }
 

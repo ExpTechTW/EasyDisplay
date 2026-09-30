@@ -61,8 +61,11 @@ final class DisplayManager {
         workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
             Log.info("app", "系統睡眠")
         }
-        workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-            Log.info("app", "從睡眠喚醒")
+        workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                Log.info("app", "從睡眠喚醒")
+                if let self, self.builtInOnline { self.builtIn?.settleAfterWake() }
+            }
         }
 
         Task {
