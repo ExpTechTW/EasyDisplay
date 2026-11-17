@@ -48,7 +48,15 @@ final class BrightnessKeys {
             callback: { _, type, event, context in
                 guard let context else { return Unmanaged.passUnretained(event) }
                 let keys = Unmanaged<BrightnessKeys>.fromOpaque(context).takeUnretainedValue()
-                let data = NSEvent(cgEvent: event).flatMap { $0.type == .systemDefined && $0.subtype.rawValue == 8 ? $0.data1 : nil }
+                // Only a system-defined event may become an NSEvent. When macOS turns the tap off it calls this with
+                // tapDisabledByTimeout or tapDisabledByUserInput and no real event, and NSEvent(cgEvent:) raises an
+                // Objective-C exception for that (NSEvent.m assertion). The exception skipped `handle`, so the tap
+                // stayed off and the keys went to macOS's slider; and when it went through a main actor task (a
+                // MonitorPanel call spins a nested run loop, which runs this), AppKit swallowed it and left the
+                // main thread's Swift executor record dangling, so the next main actor check crashed the app.
+                let data = type == BrightnessKeys.systemDefined
+                    ? NSEvent(cgEvent: event).flatMap { $0.type == .systemDefined && $0.subtype.rawValue == 8 ? $0.data1 : nil }
+                    : nil
                 let fine = event.flags.contains(.maskAlternate) && event.flags.contains(.maskShift)
                 // The tap's run loop source is on the main run loop, so this runs on the main thread.
                 let take = MainActor.assumeIsolated { keys.handle(type, data, fine: fine) }
@@ -69,6 +77,7 @@ final class BrightnessKeys {
     private func handle(_ type: CGEventType, _ data1: Int?, fine: Bool) -> Bool {
         // macOS turns a tap off that it thinks is too slow; turn it back on.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            Log.warn("keys", "macOS 關掉了亮度鍵的接手（\(type == .tapDisabledByTimeout ? "回應太慢" : "使用者輸入")），重新開啟")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return false
         }
