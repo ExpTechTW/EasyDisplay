@@ -160,7 +160,8 @@ final class Updater {
                 phase = .installing
                 try UpdateInstaller.replace(appURL, with: update)
                 try UpdateInstaller.relaunch(appURL)
-                NSApp.terminate(nil)
+                // In this task `terminate` would hang, and the relaunch waits for this process to end.
+                NSApp.quitOutsideMainQueue()
             } catch {
                 fail(UpdateFailure(error), release: release)
             }

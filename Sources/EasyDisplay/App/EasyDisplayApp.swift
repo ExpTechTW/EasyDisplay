@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         source.setEventHandler {
-            MainActor.assumeIsolated { NSApp.terminate(nil) }
+            MainActor.assumeIsolated { NSApp.quitOutsideMainQueue() }
         }
         source.resume()
         terminationSignal = source
@@ -118,5 +118,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         SettingsWindow.shared.show()
         return false
+    }
+}
+
+extension NSApplication {
+    /// Quits from code that runs as a main queue block: a Swift main actor task, or a GCD source like the SIGTERM one.
+    /// `terminate` there would hang for good. `applicationShouldTerminate` answers `.terminateLater` and restores the
+    /// display in a main actor task, and AppKit waits for that in a nested run loop; but a run loop nested in a main
+    /// queue block never drains the main queue again, so the task never starts (SIGTERM hung the app on 2026-11-17,
+    /// with no "結束" logged). Performed from the run loop instead, the nested loop drains it as usual. A button or menu
+    /// action is already on the run loop and may call `terminate` directly.
+    func quitOutsideMainQueue() {
+        performSelector(onMainThread: #selector(terminate(_:)), with: nil, waitUntilDone: false)
     }
 }
