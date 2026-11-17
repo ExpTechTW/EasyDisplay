@@ -47,7 +47,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.start(folder: MonitorDatabase.defaultURL.deletingLastPathComponent().appendingPathComponent("logs", isDirectory: true))
         let os = ProcessInfo.processInfo.operatingSystemVersion
         Log.info("app", "啟動 EasyDisplay \(BuildInfo.current.label)（macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) \(Self.sysctl("kern.osversion"))，\(Self.sysctl("hw.model"))）")
+        Self.yieldToRunningCopy()
         super.init()
+    }
+
+    /// Only one copy may run. Two copies (say `build/` and `/Applications`; LaunchServices only stops a second launch
+    /// of the same path) each take the other's backlight writes for foreign ones and revert them, so the screen
+    /// flashes between their two levels hundreds of times a second. Each also takes the other's pinned slider for a
+    /// key step and learns it, and the newcomer sees `boost.wasOn` and "restores" a boost that is still running.
+    /// This runs before the display, keys or boost state are touched, so the copy already running is left alone and
+    /// is asked to show Settings, as opening it again would. The updater's relaunch waits for the old pid to exit.
+    private static func yieldToRunningCopy() {
+        guard let id = Bundle.main.bundleIdentifier else { return }
+        let me = ProcessInfo.processInfo.processIdentifier
+        guard let other = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+            .first(where: { $0.processIdentifier != me && !$0.isTerminated }) else { return }
+        Log.warn("app", "已有另一份 EasyDisplay 在執行（pid \(other.processIdentifier)，\(other.bundleURL?.path ?? "?")），這份（\(Bundle.main.bundlePath)）直接結束")
+        Log.flush()
+        if let url = other.bundleURL { NSWorkspace.shared.open(url) }
+        exit(0)
     }
 
     /// A string from sysctl: `hw.model` is the Mac's model (Mac16,6), `kern.osversion` the macOS build (26A5416b).
