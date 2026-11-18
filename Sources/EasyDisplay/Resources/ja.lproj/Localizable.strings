@@ -89,8 +89,8 @@
 "settings.page.boost_subtitle" = "内蔵ディスプレイを色を変えずに 600 nit を超えて最大 1000 nit まで明るくします。";
 "settings.page.monitor" = "モニタ";
 "settings.page.monitor_subtitle" = "明るさ・バックライト電力・ディスプレイ温度を毎秒記録します。";
-"settings.page.updates" = "ソフトウェアアップデート";
-"settings.page.updates_subtitle" = "Apple の公証を受けた新しいバージョンを GitHub から入手します。";
+"settings.page.updates" = "アップデート";
+"settings.page.updates_subtitle" = "Apple の公証を受けた新しいバージョンを GitHub から取得します。";
 "settings.page.about" = "情報";
 "settings.page.about_subtitle" = "バージョンとソースコード。";
 "settings.current_brightness" = "現在の明るさ";
